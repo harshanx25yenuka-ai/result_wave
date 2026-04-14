@@ -1,0 +1,39 @@
+name: result_wave
+description: "Resultwave - Smart Result Management"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.0.2
+  path_provider: ^2.0.9
+  path: ^1.8.0
+  pdf: ^3.8.1
+  provider: ^6.0.5
+  shared_preferences: ^2.5.3
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - db/courses.json
+    - db/grades.json
+    - db/modules.json
+    - images/university_logo.png
+    - images/app_logo.png
+    - assets/app_icon.png

@@ -1,0 +1,14 @@
+[
+    {
+        "Course_Id": "SOFTWARE",
+        "Course_Name": "B.Tech in Software Technology"
+    },
+    {
+        "Course_Id": "NETWORK",
+        "Course_Name": "B.Tech in Network Technology"
+    },
+    {
+        "Course_Id": "MULTIMEDIA",
+        "Course_Name": "B.Tech in Multimedia and Web Technology"
+    }
+]

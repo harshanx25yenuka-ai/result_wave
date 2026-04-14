@@ -1,0 +1,282 @@
+[
+    {
+        "Module_Id": "IT103011",
+        "Module_Name": "Mathematics for ICT I",
+        "Credits": 3,
+        "Course_Id": ["SOFTWARE", "MULTIMEDIA", "NETWORK"],
+        "Semester": 1
+    },
+    {
+        "Module_Id": "IT104021",
+        "Module_Name": "Computer Programming",
+        "Credits": 4,
+        "Course_Id": ["SOFTWARE", "MULTIMEDIA", "NETWORK"],
+        "Semester": 1
+    },
+    {
+        "Module_Id": "IT104031",
+        "Module_Name": "Software Development Practices",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 1
+    },
+    {
+        "Module_Id": "IT103041",
+        "Module_Name": "Digital Electronics",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 1
+    },
+    {
+        "Module_Id": "IT103051",
+        "Module_Name": "Data Communication and Networks",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 1
+    },
+    {
+        "Module_Id": "IT103061",
+        "Module_Name": "Database Design",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 1
+    },
+    {
+        "Module_Id": "IT104071",
+        "Module_Name": "Internet Technologies",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 1
+    },
+    {
+        "Module_Id": "IT202011",
+        "Module_Name": "Operating Systems",
+        "Credits": 2,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT203021",
+        "Module_Name": "Mathematics for ICT II",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT203031",
+        "Module_Name": "Computer Architecture",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT204041",
+        "Module_Name": "Data Structures and Algorithms",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT206051",
+        "Module_Name": "Database Systems and Programming",
+        "Credits": 6,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT204061",
+        "Module_Name": "Visual Programming I",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT206071",
+        "Module_Name": "Web Programming",
+        "Credits": 6,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT203081",
+        "Module_Name": "Computer Networks",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 2
+    },
+    {
+        "Module_Id": "IT304011",
+        "Module_Name": "Web Technology and Applications",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT304021",
+        "Module_Name": "Platform Independent Programming",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT306031",
+        "Module_Name": "Visual Programming II",
+        "Credits": 6,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT306041",
+        "Module_Name": "Software Architectures and Design",
+        "Credits": 6,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT304051",
+        "Module_Name": "Software Deployment and Evolution",
+        "Credits": 4,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT304061",
+        "Module_Name": "Database Implementation",
+        "Credits": 4,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "MS304121",
+        "Module_Name": "Entrepreneurship Development and Management",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT404010",
+        "Module_Name": "Mobile Application Development",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT404020",
+        "Module_Name": "Cloud Based Application Development",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT402030",
+        "Module_Name": "Human Computer Interaction",
+        "Credits": 2,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT404041",
+        "Module_Name": "Real-Time Programming",
+        "Credits": 4,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT406051",
+        "Module_Name": "Software Testing and Reliability",
+        "Credits": 6,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT403061",
+        "Module_Name": "Enterprise System Technologies and Architectures",
+        "Credits": 3,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT402070",
+        "Module_Name": "UX Engineering",
+        "Credits": 2,
+        "Course_Id": ["SOFTWARE"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "MS403130",
+        "Module_Name": "Research Methodology",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT304071",
+        "Module_Name": "Fundamentals of Mass Communication and Media Design",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT303081",
+        "Module_Name": "Art and Design",
+        "Credits": 3,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT306091",
+        "Module_Name": "2D and 3D Graphics",
+        "Credits": 6,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT304101",
+        "Module_Name": "Video Production Techniques",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT304111",
+        "Module_Name": "Animation Technology and Applications",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 3
+    },
+    {
+        "Module_Id": "IT406081",
+        "Module_Name": "Digital  Signal Processing Techniques and Image Processing",
+        "Credits": 6,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT402090",
+        "Module_Name": "Audio Editing and Music Production ",
+        "Credits": 2,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT404101",
+        "Module_Name": "Audio and Video Postproduction Techniques",
+        "Credits": 4,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT406111",
+        "Module_Name": "Multimedia Product Development",
+        "Credits": 6,
+        "Course_Id": ["MULTIMEDIA"],
+        "Semester": 4
+    },
+    {
+        "Module_Id": "IT514011",
+        "Module_Name": "Work Based/Industial Training",
+        "Credits": 14,
+        "Course_Id": ["MULTIMEDIA", "SOFTWARE", "NETWORK"],
+        "Semester": 5
+    }
+]
