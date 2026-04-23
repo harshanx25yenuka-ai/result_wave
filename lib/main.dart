@@ -19,13 +19,47 @@ class MyApp extends StatelessWidget {
       builder: (context, themeProvider, child) {
         return MaterialApp(
           title: 'ResultWave',
+          debugShowCheckedModeBanner: false,
           theme: ThemeData(
-            primarySwatch: Colors.blue,
-            brightness: Brightness.light,
+            colorScheme: ColorScheme.light(
+              primary: Color(0xFF2563EB),
+              secondary: Color(0xFF7C3AED),
+              surface: Colors.white,
+              background: Color(0xFFF8FAFC),
+            ),
+            useMaterial3: true,
+            appBarTheme: AppBarTheme(
+              elevation: 0,
+              centerTitle: true,
+              backgroundColor: Colors.transparent,
+              foregroundColor: Color(0xFF1E293B),
+            ),
+            cardTheme: CardThemeData(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
           ),
           darkTheme: ThemeData(
-            primarySwatch: Colors.blue,
-            brightness: Brightness.dark,
+            colorScheme: ColorScheme.dark(
+              primary: Color(0xFF3B82F6),
+              secondary: Color(0xFF8B5CF6),
+              surface: Color(0xFF1E293B),
+              background: Color(0xFF0F172A),
+            ),
+            useMaterial3: true,
+            appBarTheme: AppBarTheme(
+              elevation: 0,
+              centerTitle: true,
+              backgroundColor: Colors.transparent,
+            ),
+            cardTheme: CardThemeData(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
           ),
           themeMode: themeProvider.themeMode,
           home: SplashScreen(),
