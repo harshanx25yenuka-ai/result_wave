@@ -21,7 +21,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'result_wave.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Incremented version for schema change
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE students (
@@ -42,7 +42,8 @@ class DatabaseService {
             moduleName TEXT,
             credits INTEGER,
             courseIds TEXT,
-            semester INTEGER
+            semester INTEGER,
+            gpaType TEXT
           )
         ''');
         await db.execute('''
@@ -59,6 +60,18 @@ class DatabaseService {
             PRIMARY KEY (moduleId)
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add gpaType column to modules table
+          try {
+            await db.execute(
+              'ALTER TABLE modules ADD COLUMN gpaType TEXT DEFAULT "gpa"',
+            );
+          } catch (e) {
+            // Column might already exist
+          }
+        }
       },
     );
   }
@@ -87,7 +100,7 @@ class DatabaseService {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
-    // Load modules
+    // Load modules with gpa_type
     String modulesJson = await rootBundle.loadString('db/modules.json');
     List<dynamic> modules = jsonDecode(modulesJson);
     for (var module in modules) {
@@ -97,6 +110,7 @@ class DatabaseService {
         'credits': module['Credits'],
         'courseIds': jsonEncode(module['Course_Id']),
         'semester': module['Semester'],
+        'gpaType': module['gpa_type'] ?? 'gpa',
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }
@@ -136,19 +150,23 @@ class DatabaseService {
   Future<List<Module>> getModulesByCourse(String courseId) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('modules');
-    return List.generate(maps.length, (i) {
-      List<String> courseIds = jsonDecode(maps[i]['courseIds']).cast<String>();
+    List<Module> modules = [];
+    for (var map in maps) {
+      List<String> courseIds = jsonDecode(map['courseIds']).cast<String>();
       if (courseIds.contains(courseId)) {
-        return Module(
-          moduleId: maps[i]['moduleId'],
-          moduleName: maps[i]['moduleName'],
-          credits: maps[i]['credits'],
-          courseIds: courseIds,
-          semester: maps[i]['semester'],
+        modules.add(
+          Module(
+            moduleId: map['moduleId'],
+            moduleName: map['moduleName'],
+            credits: map['credits'],
+            courseIds: courseIds,
+            semester: map['semester'],
+            gpaType: map['gpaType'] ?? 'gpa',
+          ),
         );
       }
-      return null;
-    }).where((module) => module != null).cast<Module>().toList();
+    }
+    return modules;
   }
 
   Future<List<Grade>> getGrades() async {

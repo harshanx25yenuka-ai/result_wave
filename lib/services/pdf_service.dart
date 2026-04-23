@@ -19,6 +19,12 @@ class PdfService {
   static const greyColor = PdfColor.fromInt(0xFF6B7280);
   static const lightGreyColor = PdfColor.fromInt(0xFFF3F4F6);
   static const darkTextColor = PdfColor.fromInt(0xFF111827);
+  static const orangeColor = PdfColor.fromInt(0xFFF59E0B);
+
+  // Helper function to create color with opacity
+  PdfColor _withOpacity(PdfColor color, double opacity) {
+    return PdfColor(color.red, color.green, color.blue, opacity);
+  }
 
   Future<String> generateResultsPdf({
     required String studentId,
@@ -29,32 +35,46 @@ class PdfService {
     final student = (await dbService.getStudents()).firstWhere(
       (s) => s.studentId == studentId,
     );
-    final modules = await dbService.getModulesByCourse(student.courseId);
+    final allModules = await dbService.getModulesByCourse(student.courseId);
     final results = await dbService.getResults();
     final grades = await dbService.getGrades();
     final courses = await dbService.getCourses();
     final course = courses.firstWhere((c) => c.courseId == student.courseId);
 
+    // Separate GPA and Non-GPA modules
+    final gpaModules = allModules.where((m) => m.isGpaModule).toList();
+    final nonGpaModules = allModules.where((m) => m.isNonGpaModule).toList();
+
     // Load logo
-    final logoImage = pw.MemoryImage(
-      (await rootBundle.load(
-        'images/university_logo.png',
-      )).buffer.asUint8List(),
-    );
+    pw.MemoryImage? logoImage;
+    try {
+      logoImage = pw.MemoryImage(
+        (await rootBundle.load(
+          'images/university_logo.png',
+        )).buffer.asUint8List(),
+      );
+    } catch (e) {
+      // Logo not found, continue without it
+    }
 
     // Calculate course GPA and performance suggestions
-    final semesterModules = <int, List<Module>>{};
-    for (var module in modules) {
-      semesterModules.putIfAbsent(module.semester, () => []).add(module);
+    final semesterGpaModules = <int, List<Module>>{};
+    for (var module in gpaModules) {
+      semesterGpaModules.putIfAbsent(module.semester, () => []).add(module);
+    }
+
+    final semesterNonGpaModules = <int, List<Module>>{};
+    for (var module in nonGpaModules) {
+      semesterNonGpaModules.putIfAbsent(module.semester, () => []).add(module);
     }
 
     final semesterGPAs = <int, double>{};
-    final semesterCredits = <int, int>{};
-    for (var sem in semesterModules.keys) {
+    final semesterGpaCredits = <int, int>{};
+    for (var sem in semesterGpaModules.keys) {
       int totalCredits = 0;
       double totalPoints = 0.0;
       bool hasResults = false;
-      for (var module in semesterModules[sem]!) {
+      for (var module in semesterGpaModules[sem]!) {
         totalCredits += module.credits;
         var result = results.firstWhere(
           (r) => r.moduleId == module.moduleId,
@@ -69,34 +89,68 @@ class PdfService {
           hasResults = true;
         }
       }
-      if (hasResults) {
-        semesterGPAs[sem] = totalCredits > 0 ? totalPoints / totalCredits : 0.0;
-        semesterCredits[sem] = totalCredits;
+      if (hasResults && totalCredits > 0) {
+        semesterGPAs[sem] = totalPoints / totalCredits;
+        semesterGpaCredits[sem] = totalCredits;
       }
     }
 
     double totalSemesterPoints = 0.0;
     int totalSemesterCredits = 0;
     for (var sem in semesterGPAs.keys) {
-      totalSemesterPoints += semesterGPAs[sem]! * semesterCredits[sem]!;
-      totalSemesterCredits += semesterCredits[sem]!;
+      totalSemesterPoints += semesterGPAs[sem]! * semesterGpaCredits[sem]!;
+      totalSemesterCredits += semesterGpaCredits[sem]!;
     }
     final courseGPA = totalSemesterCredits > 0
         ? totalSemesterPoints / totalSemesterCredits
         : 0.0;
 
+    // Check Non-GPA module pass status
+    bool allNonGpaPassed = true;
+    final nonGpaStatus = <int, Map<String, dynamic>>{};
+    for (var sem in semesterNonGpaModules.keys) {
+      int passed = 0;
+      int total = semesterNonGpaModules[sem]!.length;
+      for (var module in semesterNonGpaModules[sem]!) {
+        var result = results.firstWhere(
+          (r) => r.moduleId == module.moduleId,
+          orElse: () => Result(moduleId: module.moduleId, grade: 'N/A'),
+        );
+        if (_isNonGpaPassed(result.grade)) {
+          passed++;
+        }
+      }
+      bool semesterPassed = passed == total;
+      if (!semesterPassed) allNonGpaPassed = false;
+      nonGpaStatus[sem] = {
+        'passed': passed,
+        'total': total,
+        'completed': semesterPassed,
+      };
+    }
+
+    bool isDegreeEligible = courseGPA >= 2.0 && allNonGpaPassed;
+
     List<String> suggestions = [];
     for (var sem in semesterGPAs.keys) {
       if (semesterGPAs[sem]! < 2.0) {
         suggestions.add(
-          'Improve grades in Semester $sem to reach GPA of 2.0 or higher.',
+          'Improve grades in Semester $sem GPA modules to reach GPA of 2.0 or higher.',
         );
       }
     }
     if (courseGPA < 2.0) {
       suggestions.add(
-        'Improve overall grades to reach Course GPA of 2.0 or higher.',
+        'Your overall GPA is ${courseGPA.toStringAsFixed(2)}. You need a minimum of 2.0 to be eligible for the degree.',
       );
+    }
+    for (var sem in nonGpaStatus.keys) {
+      if (!nonGpaStatus[sem]!['completed']) {
+        int failed = nonGpaStatus[sem]!['total'] - nonGpaStatus[sem]!['passed'];
+        suggestions.add(
+          'You have $failed non-GPA module(s) in Semester $sem that need at least a C grade.',
+        );
+      }
     }
     for (var result in results) {
       if ([
@@ -107,7 +161,23 @@ class PdfService {
         'I(ET)',
         'I(CA)',
       ].contains(result.grade)) {
-        suggestions.add('Upgrade ${result.moduleId} to at least C.');
+        var module = allModules.firstWhere(
+          (m) => m.moduleId == result.moduleId,
+          orElse: () => Module(
+            moduleId: result.moduleId,
+            moduleName: '',
+            credits: 0,
+            courseIds: [],
+            semester: 0,
+            gpaType: 'gpa',
+          ),
+        );
+        String moduleType = module.isGpaModule
+            ? 'GPA module'
+            : 'non-GPA module';
+        suggestions.add(
+          'Upgrade ${result.moduleId} ($moduleType) to at least C.',
+        );
       }
     }
 
@@ -144,14 +214,15 @@ class PdfService {
                 ),
               ],
             ),
-            pw.Container(
-              padding: pw.EdgeInsets.all(8),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.white,
-                borderRadius: pw.BorderRadius.circular(8),
+            if (logoImage != null)
+              pw.Container(
+                padding: pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.white,
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                child: pw.Image(logoImage, width: 50, height: 50),
               ),
-              child: pw.Image(logoImage, width: 50, height: 50),
-            ),
           ],
         ),
       );
@@ -170,7 +241,7 @@ class PdfService {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              'Generated by ResultWave Community 2025',
+              'Generated by ResultWave',
               style: pw.TextStyle(
                 fontSize: 10,
                 color: greyColor,
@@ -227,7 +298,7 @@ class PdfService {
     }
 
     // Section Title Widget
-    pw.Widget buildSectionTitle(String title, {pw.IconData? icon}) {
+    pw.Widget buildSectionTitle(String title) {
       return pw.Container(
         width: double.infinity,
         padding: pw.EdgeInsets.symmetric(vertical: 12, horizontal: 15),
@@ -284,16 +355,21 @@ class PdfService {
             ...data.map(
               (row) => pw.TableRow(
                 children: row.asMap().entries.map((entry) {
-                  final isGradeColumn =
-                      entry.key == 2 && headers.length > 2; // Grade column
+                  final isGradeColumn = entry.key == 3 && headers.length > 3;
+                  final isModuleCodeColumn = entry.key == 0;
                   final cellValue = entry.value;
                   PdfColor? bgColor;
                   PdfColor textColor = darkTextColor;
 
-                  // Color coding for grades
                   if (isGradeColumn) {
                     if (['A+', 'A', 'A-'].contains(cellValue)) {
                       bgColor = accentColor;
+                      textColor = PdfColors.white;
+                    } else if (['B+', 'B', 'B-'].contains(cellValue)) {
+                      bgColor = secondaryColor;
+                      textColor = PdfColors.white;
+                    } else if (['C+', 'C'].contains(cellValue)) {
+                      bgColor = orangeColor;
                       textColor = PdfColors.white;
                     } else if ([
                       'F',
@@ -305,7 +381,13 @@ class PdfService {
                     ].contains(cellValue)) {
                       bgColor = warningColor;
                       textColor = PdfColors.white;
+                    } else if (cellValue.contains('Non-GPA')) {
+                      bgColor = _withOpacity(orangeColor, 0.2);
                     }
+                  }
+
+                  if (isModuleCodeColumn && cellValue.contains('Non-GPA')) {
+                    bgColor = _withOpacity(orangeColor, 0.1);
                   }
 
                   return pw.Container(
@@ -356,7 +438,7 @@ class PdfService {
                       shape: pw.BoxShape.circle,
                     ),
                     child: pw.Icon(
-                      pw.IconData(0xe24d), // document icon
+                      pw.IconData(0xe24d),
                       color: PdfColors.white,
                       size: 40,
                     ),
@@ -440,17 +522,87 @@ class PdfService {
                   buildInfoCard(
                     'Overall GPA',
                     courseGPA.toStringAsFixed(2),
-                    color: courseGPA >= 3.5
+                    color: courseGPA >= 3.0
                         ? accentColor
                         : courseGPA >= 2.0
                         ? secondaryColor
                         : warningColor,
                   ),
                   buildInfoCard(
-                    'Total Credits',
+                    'Total Credits (GPA)',
                     totalSemesterCredits.toString(),
                   ),
                 ],
+              ),
+              pw.SizedBox(height: 30),
+
+              // Degree Eligibility Card
+              pw.Container(
+                width: double.infinity,
+                padding: pw.EdgeInsets.all(20),
+                decoration: pw.BoxDecoration(
+                  color: isDegreeEligible
+                      ? _withOpacity(accentColor, 0.1)
+                      : _withOpacity(warningColor, 0.1),
+                  borderRadius: pw.BorderRadius.circular(12),
+                  border: pw.Border.all(
+                    color: isDegreeEligible ? accentColor : warningColor,
+                    width: 1,
+                  ),
+                ),
+                child: pw.Row(
+                  children: [
+                    pw.Icon(
+                      isDegreeEligible
+                          ? pw.IconData(0xe876)
+                          : pw.IconData(0xe002),
+                      color: isDegreeEligible ? accentColor : warningColor,
+                      size: 32,
+                    ),
+                    pw.SizedBox(width: 16),
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Degree Status',
+                            style: pw.TextStyle(
+                              fontSize: 14,
+                              fontWeight: pw.FontWeight.bold,
+                              color: isDegreeEligible
+                                  ? accentColor
+                                  : warningColor,
+                            ),
+                          ),
+                          pw.Text(
+                            isDegreeEligible
+                                ? 'Eligible for Degree'
+                                : 'Not Eligible for Degree',
+                            style: pw.TextStyle(
+                              fontSize: 16,
+                              fontWeight: pw.FontWeight.bold,
+                              color: isDegreeEligible
+                                  ? accentColor
+                                  : warningColor,
+                            ),
+                          ),
+                          if (!isDegreeEligible) ...[
+                            pw.SizedBox(height: 4),
+                            pw.Text(
+                              courseGPA < 2.0
+                                  ? 'GPA requirement: ${courseGPA.toStringAsFixed(2)}/2.00'
+                                  : 'Non-GPA modules: Some modules not passed',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: warningColor,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               pw.SizedBox(height: 30),
 
@@ -509,65 +661,103 @@ class PdfService {
                         ),
                       ),
                       pw.SizedBox(height: 15),
-                      ...semesterGPAs.entries.map((entry) {
-                        final sem = entry.key;
-                        final gpa = entry.value;
-                        return pw.Container(
-                          margin: pw.EdgeInsets.only(bottom: 10),
-                          padding: pw.EdgeInsets.symmetric(
-                            horizontal: 15,
-                            vertical: 10,
-                          ),
-                          decoration: pw.BoxDecoration(
-                            color: PdfColors.white,
-                            borderRadius: pw.BorderRadius.circular(5),
-                            border: pw.Border.all(
-                              color: gpa >= 3.0
-                                  ? accentColor
-                                  : gpa >= 2.0
-                                  ? secondaryColor
-                                  : warningColor,
-                              width: 1,
+                      ...() {
+                        final sortedSemesters = semesterGPAs.keys.toList()
+                          ..sort();
+                        return sortedSemesters.map((sem) {
+                          final gpa = semesterGPAs[sem]!;
+                          final nonGpaInfo = nonGpaStatus[sem];
+                          return pw.Container(
+                            margin: pw.EdgeInsets.only(bottom: 10),
+                            padding: pw.EdgeInsets.symmetric(
+                              horizontal: 15,
+                              vertical: 10,
                             ),
-                          ),
-                          child: pw.Row(
-                            mainAxisAlignment:
-                                pw.MainAxisAlignment.spaceBetween,
-                            children: [
-                              pw.Text(
-                                'Semester $sem',
-                                style: pw.TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: darkTextColor,
-                                ),
+                            decoration: pw.BoxDecoration(
+                              color: PdfColors.white,
+                              borderRadius: pw.BorderRadius.circular(5),
+                              border: pw.Border.all(
+                                color: gpa >= 3.0
+                                    ? accentColor
+                                    : gpa >= 2.0
+                                    ? secondaryColor
+                                    : warningColor,
+                                width: 1,
                               ),
-                              pw.Container(
-                                padding: pw.EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
+                            ),
+                            child: pw.Column(
+                              children: [
+                                pw.Row(
+                                  mainAxisAlignment:
+                                      pw.MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    pw.Text(
+                                      'Semester $sem',
+                                      style: pw.TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: pw.FontWeight.bold,
+                                        color: darkTextColor,
+                                      ),
+                                    ),
+                                    pw.Container(
+                                      padding: pw.EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: pw.BoxDecoration(
+                                        color: gpa >= 3.0
+                                            ? accentColor
+                                            : gpa >= 2.0
+                                            ? secondaryColor
+                                            : warningColor,
+                                        borderRadius: pw.BorderRadius.circular(
+                                          12,
+                                        ),
+                                      ),
+                                      child: pw.Text(
+                                        'GPA: ${gpa.toStringAsFixed(2)}',
+                                        style: pw.TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: pw.FontWeight.bold,
+                                          color: PdfColors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                decoration: pw.BoxDecoration(
-                                  color: gpa >= 3.0
-                                      ? accentColor
-                                      : gpa >= 2.0
-                                      ? secondaryColor
-                                      : warningColor,
-                                  borderRadius: pw.BorderRadius.circular(12),
-                                ),
-                                child: pw.Text(
-                                  'GPA: ${gpa.toStringAsFixed(2)}',
-                                  style: pw.TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: PdfColors.white,
+                                if (nonGpaInfo != null &&
+                                    nonGpaInfo['total'] > 0)
+                                  pw.SizedBox(height: 8),
+                                if (nonGpaInfo != null &&
+                                    nonGpaInfo['total'] > 0)
+                                  pw.Row(
+                                    children: [
+                                      pw.Icon(
+                                        nonGpaInfo['completed']
+                                            ? pw.IconData(0xe876)
+                                            : pw.IconData(0xe002),
+                                        color: nonGpaInfo['completed']
+                                            ? accentColor
+                                            : warningColor,
+                                        size: 12,
+                                      ),
+                                      pw.SizedBox(width: 4),
+                                      pw.Text(
+                                        'Non-GPA: ${nonGpaInfo['passed']}/${nonGpaInfo['total']} passed',
+                                        style: pw.TextStyle(
+                                          fontSize: 10,
+                                          color: nonGpaInfo['completed']
+                                              ? accentColor
+                                              : warningColor,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
+                              ],
+                            ),
+                          );
+                        }).toList();
+                      }(),
                     ],
                   ),
                 ),
@@ -639,7 +829,7 @@ class PdfService {
                     pw.SizedBox(height: 15),
                     if (suggestions.isEmpty)
                       pw.Text(
-                        'Excellent performance! Your academic standing is strong with no immediate areas requiring attention. Continue maintaining this high standard of academic excellence.',
+                        'Excellent performance! Your academic standing is strong. You have met both GPA and non-GPA module requirements for degree eligibility.',
                         style: pw.TextStyle(
                           fontSize: 14,
                           color: PdfColors.white,
@@ -700,13 +890,24 @@ class PdfService {
     }
 
     // Semester result pages
-    final semesters =
-        semester != null ? [semester] : semesterModules.keys.toList()
+    final semestersToProcess =
+        semester != null
+              ? [semester]
+              : allModules.map((m) => m.semester).toSet().toList()
           ..sort();
 
-    for (var sem in semesters) {
-      final modulesInSemester = semesterModules[sem] ?? [];
-      if (modulesInSemester.isNotEmpty) {
+    for (var sem in semestersToProcess) {
+      final gpaModulesInSemester = semesterGpaModules[sem] ?? [];
+      final nonGpaModulesInSemester = semesterNonGpaModules[sem] ?? [];
+      final allModulesInSemester = [
+        ...gpaModulesInSemester,
+        ...nonGpaModulesInSemester,
+      ];
+
+      if (allModulesInSemester.isNotEmpty) {
+        final semesterGpa = semesterGPAs[sem];
+        final nonGpaInfo = nonGpaStatus[sem];
+
         pdf.addPage(
           pw.Page(
             pageFormat: PdfPageFormat.a4,
@@ -738,33 +939,75 @@ class PdfService {
                         ),
                       ),
                     ),
-                    pw.Container(
-                      padding: pw.EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 20,
-                      ),
-                      decoration: pw.BoxDecoration(
-                        color:
-                            semesterGPAs[sem] != null &&
-                                semesterGPAs[sem]! >= 3.5
-                            ? accentColor
-                            : semesterGPAs[sem] != null &&
-                                  semesterGPAs[sem]! >= 2.0
-                            ? secondaryColor
-                            : warningColor,
-                        borderRadius: pw.BorderRadius.circular(8),
-                      ),
-                      child: pw.Text(
-                        'GPA: ${semesterGPAs[sem]?.toStringAsFixed(2) ?? 'N/A'}',
-                        style: pw.TextStyle(
-                          fontSize: 16,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.white,
+                    if (semesterGpa != null)
+                      pw.Container(
+                        padding: pw.EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 20,
+                        ),
+                        decoration: pw.BoxDecoration(
+                          color: semesterGpa >= 3.5
+                              ? accentColor
+                              : semesterGpa >= 2.0
+                              ? secondaryColor
+                              : warningColor,
+                          borderRadius: pw.BorderRadius.circular(8),
+                        ),
+                        child: pw.Text(
+                          'GPA: ${semesterGpa.toStringAsFixed(2)}',
+                          style: pw.TextStyle(
+                            fontSize: 16,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.white,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
+
+                // Non-GPA status if any
+                if (nonGpaInfo != null && nonGpaInfo['total'] > 0)
+                  pw.Container(
+                    margin: pw.EdgeInsets.only(top: 16),
+                    padding: pw.EdgeInsets.all(12),
+                    decoration: pw.BoxDecoration(
+                      color: nonGpaInfo['completed']
+                          ? _withOpacity(accentColor, 0.1)
+                          : _withOpacity(warningColor, 0.1),
+                      borderRadius: pw.BorderRadius.circular(8),
+                      border: pw.Border.all(
+                        color: nonGpaInfo['completed']
+                            ? accentColor
+                            : warningColor,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: pw.Row(
+                      children: [
+                        pw.Icon(
+                          nonGpaInfo['completed']
+                              ? pw.IconData(0xe876)
+                              : pw.IconData(0xe002),
+                          color: nonGpaInfo['completed']
+                              ? accentColor
+                              : warningColor,
+                          size: 16,
+                        ),
+                        pw.SizedBox(width: 8),
+                        pw.Text(
+                          'Non-GPA Modules: ${nonGpaInfo['passed']}/${nonGpaInfo['total']} passed',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: nonGpaInfo['completed']
+                                ? accentColor
+                                : warningColor,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 pw.SizedBox(height: 25),
 
                 // Enhanced Results Table
@@ -776,7 +1019,7 @@ class PdfService {
                     'Grade',
                     'Grade Points',
                   ],
-                  modulesInSemester.map((module) {
+                  allModulesInSemester.map((module) {
                     final result = results.firstWhere(
                       (r) => r.moduleId == module.moduleId,
                       orElse: () =>
@@ -787,8 +1030,12 @@ class PdfService {
                       orElse: () =>
                           Grade(grade: 'N/A', gradePoint: 0.0, status: ''),
                     );
+                    String moduleCodeDisplay = module.moduleId;
+                    if (module.isNonGpaModule) {
+                      moduleCodeDisplay = '${module.moduleId} (Non-GPA)';
+                    }
                     return [
-                      module.moduleId,
+                      moduleCodeDisplay,
                       module.moduleName,
                       module.credits.toString(),
                       result.grade,
@@ -818,7 +1065,7 @@ class PdfService {
                             style: pw.TextStyle(fontSize: 12, color: greyColor),
                           ),
                           pw.Text(
-                            modulesInSemester.length.toString(),
+                            allModulesInSemester.length.toString(),
                             style: pw.TextStyle(
                               fontSize: 20,
                               fontWeight: pw.FontWeight.bold,
@@ -830,11 +1077,11 @@ class PdfService {
                       pw.Column(
                         children: [
                           pw.Text(
-                            'Total Credits',
+                            'GPA Credits',
                             style: pw.TextStyle(fontSize: 12, color: greyColor),
                           ),
                           pw.Text(
-                            (semesterCredits[sem] ?? 0).toString(),
+                            (semesterGpaCredits[sem] ?? 0).toString(),
                             style: pw.TextStyle(
                               fontSize: 20,
                               fontWeight: pw.FontWeight.bold,
@@ -846,20 +1093,17 @@ class PdfService {
                       pw.Column(
                         children: [
                           pw.Text(
-                            'Average Grade',
+                            'Semester GPA',
                             style: pw.TextStyle(fontSize: 12, color: greyColor),
                           ),
                           pw.Text(
-                            semesterGPAs[sem]?.toStringAsFixed(2) ?? 'N/A',
+                            semesterGpa?.toStringAsFixed(2) ?? 'N/A',
                             style: pw.TextStyle(
                               fontSize: 20,
                               fontWeight: pw.FontWeight.bold,
-                              color:
-                                  semesterGPAs[sem] != null &&
-                                      semesterGPAs[sem]! >= 3.0
+                              color: semesterGpa != null && semesterGpa! >= 3.0
                                   ? accentColor
-                                  : semesterGPAs[sem] != null &&
-                                        semesterGPAs[sem]! >= 2.0
+                                  : semesterGpa != null && semesterGpa! >= 2.0
                                   ? secondaryColor
                                   : warningColor,
                             ),
@@ -890,5 +1134,13 @@ class PdfService {
     await file.writeAsBytes(await pdf.save());
 
     return file.path;
+  }
+
+  bool _isNonGpaPassed(String grade) {
+    if (grade == 'N/A') return false;
+    if (['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade)) {
+      return true;
+    }
+    return false;
   }
 }

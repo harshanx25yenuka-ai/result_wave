@@ -57,29 +57,12 @@ class _ResultsPageState extends State<ResultsPage> {
     return Colors.orange;
   }
 
-  String _getGradeStatus(String grade) {
-    if ([
-      'A+',
-      'A',
-      'A-',
-      'B+',
-      'B',
-      'B-',
-      'C+',
-      'C',
-      'C-',
-      'D+',
-      'D',
-    ].contains(grade)) {
-      return 'Pass';
+  bool _isNonGpaPassed(String grade) {
+    if (grade == 'N/A') return false;
+    if (['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade)) {
+      return true;
     }
-    if (['F', 'F(CA)', 'F(ET)'].contains(grade)) {
-      return 'Fail';
-    }
-    if (['I', 'I(ET)', 'I(CA)'].contains(grade)) {
-      return 'Incomplete';
-    }
-    return 'Pending';
+    return false;
   }
 
   void _editResult(String moduleId, String currentGrade) async {
@@ -141,6 +124,25 @@ class _ResultsPageState extends State<ResultsPage> {
                       .where((m) => m.semester == semester)
                       .toList();
 
+                  // Calculate pass status for non-GPA modules in this semester
+                  int nonGpaTotal = semesterModules
+                      .where((m) => m.isNonGpaModule)
+                      .length;
+                  int nonGpaPassed = semesterModules
+                      .where((m) => m.isNonGpaModule)
+                      .where((m) {
+                        var result = _results.firstWhere(
+                          (r) => r.moduleId == m.moduleId,
+                          orElse: () =>
+                              Result(moduleId: m.moduleId, grade: 'N/A'),
+                        );
+                        return _isNonGpaPassed(result.grade);
+                      })
+                      .length;
+
+                  bool allNonGpaPassed =
+                      nonGpaTotal == 0 || nonGpaPassed == nonGpaTotal;
+
                   return Card(
                     margin: EdgeInsets.only(bottom: 16),
                     child: Theme(
@@ -152,7 +154,9 @@ class _ResultsPageState extends State<ResultsPage> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
+                            color: allNonGpaPassed
+                                ? Colors.blue.withOpacity(0.1)
+                                : Colors.orange.withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Center(
@@ -160,7 +164,9 @@ class _ResultsPageState extends State<ResultsPage> {
                               '$semester',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.blue,
+                                color: allNonGpaPassed
+                                    ? Colors.blue
+                                    : Colors.orange,
                               ),
                             ),
                           ),
@@ -172,13 +178,33 @@ class _ResultsPageState extends State<ResultsPage> {
                             fontSize: 16,
                           ),
                         ),
-                        subtitle: Text('${semesterModules.length} modules'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${semesterModules.length} modules'),
+                            if (nonGpaTotal > 0)
+                              Text(
+                                'Non-GPA: $nonGpaPassed/$nonGpaTotal passed',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: allNonGpaPassed
+                                      ? Colors.green
+                                      : Colors.orange,
+                                ),
+                              ),
+                          ],
+                        ),
                         children: semesterModules.map((module) {
                           var result = _results.firstWhere(
                             (r) => r.moduleId == module.moduleId,
                             orElse: () =>
                                 Result(moduleId: module.moduleId, grade: 'N/A'),
                           );
+                          bool isNonGpa = module.isNonGpaModule;
+                          bool isPassed = isNonGpa
+                              ? _isNonGpaPassed(result.grade)
+                              : true;
+
                           return ListTile(
                             leading: Container(
                               width: 8,
@@ -188,9 +214,47 @@ class _ResultsPageState extends State<ResultsPage> {
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            title: Text(
-                              module.moduleId,
-                              style: TextStyle(fontWeight: FontWeight.w600),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        module.moduleId,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (isNonGpa)
+                                        Container(
+                                          margin: EdgeInsets.only(top: 2),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.withOpacity(
+                                              0.1,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Non-GPA',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              color: Colors.orange,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                             subtitle: Text(
                               module.moduleName,
@@ -207,6 +271,9 @@ class _ResultsPageState extends State<ResultsPage> {
                                   result.grade,
                                 ).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(20),
+                                border: isNonGpa && !isPassed
+                                    ? Border.all(color: Colors.orange, width: 1)
+                                    : null,
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -218,6 +285,15 @@ class _ResultsPageState extends State<ResultsPage> {
                                       color: _getGradeColor(result.grade),
                                     ),
                                   ),
+                                  if (isNonGpa && !isPassed)
+                                    Padding(
+                                      padding: EdgeInsets.only(left: 4),
+                                      child: Icon(
+                                        Icons.warning,
+                                        size: 14,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
                                   SizedBox(width: 8),
                                   Container(
                                     width: 1,
