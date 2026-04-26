@@ -3,18 +3,27 @@ import 'package:result_wave/models/module.dart';
 import 'package:result_wave/models/result.dart';
 import 'package:result_wave/models/grade.dart';
 import 'package:result_wave/models/student.dart';
+import 'package:result_wave/models/course.dart';
 import 'package:result_wave/services/database_service.dart';
+import 'package:result_wave/utils/constants.dart';
+import 'package:result_wave/utils/animations.dart';
+import 'package:result_wave/widgets/glass_card.dart';
+import 'package:result_wave/widgets/insight_card.dart';
+import 'package:result_wave/widgets/gauge_chart.dart';
 
 class DashboardPage extends StatefulWidget {
   final String studentId;
 
-  DashboardPage({required this.studentId});
+  const DashboardPage({Key? key, required this.studentId}) : super(key: key);
 
   @override
   _DashboardPageState createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+
   int _numModules = 0;
   int _numGpaModules = 0;
   int _numNonGpaModules = 0;
@@ -28,21 +37,34 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isDegreeEligible = false;
   String _degreeStatus = '';
   bool _isLoading = true;
+  String _studentName = '';
+  String _courseName = '';
 
-  // New lists for failed and incomplete modules
   List<Map<String, dynamic>> _failedModules = [];
   List<Map<String, dynamic>> _incompleteModules = [];
+
+  // Collapse states
+  bool _isFailedModulesExpanded = false;
+  bool _isIncompleteModulesExpanded = false;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     Student student = (await DatabaseService().getStudents()).firstWhere(
       (s) => s.studentId == widget.studentId,
@@ -52,8 +74,13 @@ class _DashboardPageState extends State<DashboardPage> {
     );
     List<Result> results = await DatabaseService().getResults();
     List<Grade> grades = await DatabaseService().getGrades();
+    List<Course> courses = await DatabaseService().getCourses();
 
-    // Separate GPA and Non-GPA modules
+    _studentName = student.studentName;
+    _courseName = courses
+        .firstWhere((c) => c.courseId == student.courseId)
+        .courseName;
+
     List<Module> gpaModules = modules.where((m) => m.isGpaModule).toList();
     List<Module> nonGpaModules = modules
         .where((m) => m.isNonGpaModule)
@@ -69,7 +96,6 @@ class _DashboardPageState extends State<DashboardPage> {
       semesterNonGpaModules.putIfAbsent(module.semester, () => []).add(module);
     }
 
-    // Calculate Semester GPAs using only GPA modules
     Map<int, double> semesterGPAs = {};
     Map<int, int> semesterGpaCredits = {};
 
@@ -100,7 +126,6 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
-    // Check Non-GPA module pass status for each semester
     Map<int, int> semesterPassedNonGpa = {};
     Map<int, int> semesterTotalNonGpa = {};
 
@@ -113,17 +138,13 @@ class _DashboardPageState extends State<DashboardPage> {
           (r) => r.moduleId == module.moduleId,
           orElse: () => Result(moduleId: module.moduleId, grade: 'N/A'),
         );
-        // Non-GPA modules need at least 'C' grade to pass
-        if (_isNonGpaPassed(result.grade)) {
-          passedCount++;
-        }
+        if (_isNonGpaPassed(result.grade)) passedCount++;
       }
 
       semesterPassedNonGpa[semester] = passedCount;
       semesterTotalNonGpa[semester] = totalCount;
     }
 
-    // Calculate Overall Course GPA (using only GPA modules)
     double totalCoursePoints = 0.0;
     int totalCourseCredits = 0;
     for (var semester in semesterGPAs.keys) {
@@ -135,7 +156,6 @@ class _DashboardPageState extends State<DashboardPage> {
         ? totalCoursePoints / totalCourseCredits
         : 0.0;
 
-    // Check Degree Eligibility
     bool allNonGpaPassed = true;
     for (var semester in semesterNonGpaModules.keys) {
       if (semesterPassedNonGpa[semester] != semesterTotalNonGpa[semester]) {
@@ -144,53 +164,33 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
-    bool gpaConditionMet = courseGPA >= 2.0;
-    bool isEligible = gpaConditionMet && allNonGpaPassed;
+    bool isEligible = courseGPA >= 2.0 && allNonGpaPassed;
 
     String degreeStatus = '';
     if (isEligible) {
       degreeStatus = 'Eligible for Degree';
     } else {
-      if (!gpaConditionMet && !allNonGpaPassed) {
-        degreeStatus = 'Not Eligible: Low GPA & Failed Non-GPA Modules';
-      } else if (!gpaConditionMet) {
-        degreeStatus = 'Not Eligible: Overall GPA below 2.0';
+      if (!allNonGpaPassed) {
+        degreeStatus = 'Not Eligible: Non-GPA modules need C or above';
+      } else if (courseGPA < 2.0) {
+        degreeStatus = 'Not Eligible: GPA below 2.0';
       } else {
-        degreeStatus =
-            'Not Eligible: Some Non-GPA modules not passed (Need at least C)';
+        degreeStatus = 'Not Eligible';
       }
     }
 
-    // Generate suggestions
     List<String> suggestions = [];
-
-    // GPA related suggestions
     for (var semester in semesterGPAs.keys) {
       if (semesterGPAs[semester]! < 2.0) {
-        suggestions.add(
-          'Improve grades in Semester $semester GPA modules to reach GPA of 2.0 or higher.',
-        );
+        suggestions.add('Improve Semester $semester GPA to 2.0+');
       }
     }
     if (courseGPA < 2.0) {
       suggestions.add(
-        'Your overall GPA is ${courseGPA.toStringAsFixed(2)}. You need a minimum of 2.0 to be eligible for the degree.',
+        'Overall GPA ${courseGPA.toStringAsFixed(2)} needs to reach 2.0',
       );
     }
 
-    // Non-GPA module related suggestions
-    for (var semester in semesterNonGpaModules.keys) {
-      int failedCount =
-          (semesterTotalNonGpa[semester] ?? 0) -
-          (semesterPassedNonGpa[semester] ?? 0);
-      if (failedCount > 0) {
-        suggestions.add(
-          'You have $failedCount non-GPA module(s) in Semester $semester that need at least a C grade.',
-        );
-      }
-    }
-
-    // Collect failed and incomplete modules
     List<Map<String, dynamic>> failedModules = [];
     List<Map<String, dynamic>> incompleteModules = [];
 
@@ -209,7 +209,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
       String moduleType = module.isGpaModule ? 'GPA' : 'Non-GPA';
 
-      // Check for failed modules (F, F(ET), F(CA))
       if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
         failedModules.add({
           'moduleId': module.moduleId,
@@ -219,12 +218,9 @@ class _DashboardPageState extends State<DashboardPage> {
           'type': moduleType,
           'credits': module.credits,
         });
-        suggestions.add(
-          'Upgrade ${result.moduleId} ($moduleType module) - Failed (${result.grade})',
-        );
+        suggestions.add('Retake ${module.moduleId} - Failed');
       }
 
-      // Check for incomplete modules (I, I(ET), I(CA))
       if (['I', 'I(ET)', 'I(CA)'].contains(result.grade)) {
         incompleteModules.add({
           'moduleId': module.moduleId,
@@ -234,13 +230,10 @@ class _DashboardPageState extends State<DashboardPage> {
           'type': moduleType,
           'credits': module.credits,
         });
-        suggestions.add(
-          'Complete ${result.moduleId} ($moduleType module) - Incomplete (${result.grade})',
-        );
+        suggestions.add('Complete ${module.moduleId} - Incomplete');
       }
     }
 
-    // Calculate number of semesters
     Set<int> allSemesters = {};
     allSemesters.addAll(semesterGpaModules.keys);
     allSemesters.addAll(semesterNonGpaModules.keys);
@@ -262,766 +255,847 @@ class _DashboardPageState extends State<DashboardPage> {
       _incompleteModules = incompleteModules;
       _isLoading = false;
     });
+
+    _animationController.forward();
   }
 
   bool _isNonGpaPassed(String grade) {
-    // Non-GPA modules need at least 'C' to pass
     if (grade == 'N/A') return false;
-    if (['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade)) {
-      return true;
-    }
-    return false;
+    return ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade);
   }
 
   Color _getGpaColor(double gpa) {
-    if (gpa >= 3.0) return Colors.green;
-    if (gpa >= 2.0) return Colors.orange;
-    return Colors.red;
+    if (gpa >= 3.5) return AppColors.success;
+    if (gpa >= 3.0) return AppColors.primaryBlue;
+    if (gpa >= 2.0) return AppColors.warning;
+    return AppColors.error;
   }
 
-  Color _getDegreeStatusColor() {
-    if (_isDegreeEligible) return Colors.green;
-    return Colors.red;
-  }
-
-  Color _getGradeColor(String grade) {
-    if (['F', 'F(ET)', 'F(CA)'].contains(grade)) return Colors.red;
-    if (['I', 'I(ET)', 'I(CA)'].contains(grade)) return Colors.orange;
-    if (['A+', 'A', 'A-'].contains(grade)) return Colors.green;
-    if (['B+', 'B', 'B-'].contains(grade)) return Colors.blue;
-    if (['C+', 'C', 'C-'].contains(grade)) return Colors.cyan;
-    return Colors.grey;
+  String _getGpaLabel(double gpa) {
+    if (gpa >= 3.7) return 'Excellent';
+    if (gpa >= 3.0) return 'Very Good';
+    if (gpa >= 2.0) return 'Good';
+    return 'Needs Improvement';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Dashboard'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 0,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: Theme.of(context).brightness == Brightness.dark
+            ? AppGradients.darkBackgroundGradient
+            : AppGradients.backgroundGradient,
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Stats Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            'Modules',
-                            '$_numModules',
-                            Icons.book_outlined,
-                            Colors.blue,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            'Semesters',
-                            '$_numSemesters',
-                            Icons.calendar_today,
-                            Colors.purple,
-                          ),
-                        ),
-                      ],
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_studentName),
+              if (_studentName.isNotEmpty)
+                Text(
+                  _courseName,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                ),
+            ],
+          ),
+          actions: [
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: AppGradients.goldGradient,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.star, size: 16, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    _courseGPA.toStringAsFixed(2),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            'GPA Modules',
-                            '$_numGpaModules',
-                            Icons.auto_graph,
-                            Colors.green,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            'Non-GPA Modules',
-                            '$_numNonGpaModules',
-                            Icons.school_outlined,
-                            Colors.orange,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 20),
-
-                    // Degree Status Card
-                    Card(
-                      color: _getDegreeStatusColor().withOpacity(0.1),
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _isDegreeEligible
-                                  ? Icons.verified
-                                  : Icons.warning_amber,
-                              color: _getDegreeStatusColor(),
-                              size: 32,
-                            ),
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: _loadData,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Welcome Section
+                      FadeInAnimation(
+                        child: GlassCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Text(
-                                    'Degree Status',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: _getDegreeStatusColor(),
-                                      fontWeight: FontWeight.w600,
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      gradient: AppGradients.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.auto_awesome,
+                                      color: Colors.white,
                                     ),
                                   ),
-                                  Text(
-                                    _degreeStatus,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: _getDegreeStatusColor(),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 20),
-
-                    // GPA Card
-                    Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Overall GPA',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                    Text(
-                                      '(Based on GPA modules only)',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey[500],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getGpaColor(
-                                      _courseGPA,
-                                    ).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    _courseGPA.toStringAsFixed(2),
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: _getGpaColor(_courseGPA),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 16),
-                            LinearProgressIndicator(
-                              value: _courseGPA / 4.0,
-                              backgroundColor: Colors.grey[200],
-                              color: _getGpaColor(_courseGPA),
-                              minHeight: 8,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            SizedBox(height: 20),
-                            Container(
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.info_outline,
-                                    size: 16,
-                                    color: Colors.grey[600],
-                                  ),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 16),
                                   Expanded(
-                                    child: Text(
-                                      'Minimum GPA required: 2.00',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Welcome Back!',
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Here\'s your academic progress summary',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  if (_courseGPA >= 2.0)
-                                    Icon(
-                                      Icons.check_circle,
-                                      size: 16,
-                                      color: Colors.green,
-                                    )
-                                  else
-                                    Icon(
-                                      Icons.cancel,
-                                      size: 16,
-                                      color: Colors.red,
-                                    ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 20),
-
-                    // Failed Modules Section
-                    if (_failedModules.isNotEmpty) ...[
-                      Container(
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.red.withOpacity(0.3),
+                            ],
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.cancel, color: Colors.red, size: 24),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Failed Modules',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                                Container(
-                                  margin: EdgeInsets.only(left: 12),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${_failedModules.length}',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            ..._failedModules.map((module) {
-                              return Container(
-                                margin: EdgeInsets.only(bottom: 8),
-                                padding: EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.red.withOpacity(0.3),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 4,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Text(
-                                                module['moduleId'],
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              SizedBox(width: 8),
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: module['type'] == 'GPA'
-                                                      ? Colors.green
-                                                            .withOpacity(0.1)
-                                                      : Colors.orange
-                                                            .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  module['type'],
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    color:
-                                                        module['type'] == 'GPA'
-                                                        ? Colors.green
-                                                        : Colors.orange,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Text(
-                                            module['moduleName'],
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            module['grade'],
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.red,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(height: 4),
-                                        Text(
-                                          'Semester ${module['semester']}',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey[500],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
                       ),
-                      SizedBox(height: 20),
-                    ],
+                      const SizedBox(height: 20),
 
-                    // Incomplete Modules Section
-                    if (_incompleteModules.isNotEmpty) ...[
-                      Container(
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.orange.withOpacity(0.3),
+                      // Stats Row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FadeInAnimation(
+                              delay: 100,
+                              child: InsightCard(
+                                title: 'Total Modules',
+                                value: '$_numModules',
+                                icon: Icons.book_outlined,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.pending,
-                                  color: Colors.orange,
-                                  size: 24,
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Incomplete Modules',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                                Container(
-                                  margin: EdgeInsets.only(left: 12),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${_incompleteModules.length}',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FadeInAnimation(
+                              delay: 150,
+                              child: InsightCard(
+                                title: 'Semesters',
+                                value: '$_numSemesters',
+                                icon: Icons.calendar_today,
+                                color: AppColors.accentPurple,
+                              ),
                             ),
-                            SizedBox(height: 12),
-                            ..._incompleteModules.map((module) {
-                              return Container(
-                                margin: EdgeInsets.only(bottom: 8),
-                                padding: EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.orange.withOpacity(0.3),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FadeInAnimation(
+                              delay: 200,
+                              child: InsightCard(
+                                title: 'GPA Modules',
+                                value: '$_numGpaModules',
+                                icon: Icons.auto_graph,
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FadeInAnimation(
+                              delay: 250,
+                              child: InsightCard(
+                                title: 'Non-GPA',
+                                value: '$_numNonGpaModules',
+                                icon: Icons.school_outlined,
+                                color: AppColors.warning,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // GPA Analytics Section
+                      FadeInAnimation(
+                        delay: 300,
+                        child: GlassCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      gradient: AppGradients.goldGradient,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.trending_up,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
                                   ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 4,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: Colors.orange,
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'GPA Analytics',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Text(
-                                                module['moduleId'],
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              SizedBox(width: 8),
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: module['type'] == 'GPA'
-                                                      ? Colors.green
-                                                            .withOpacity(0.1)
-                                                      : Colors.orange
-                                                            .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  module['type'],
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    color:
-                                                        module['type'] == 'GPA'
-                                                        ? Colors.green
-                                                        : Colors.orange,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Text(
-                                            module['moduleName'],
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.orange.withOpacity(
-                                              0.1,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            module['grade'],
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.orange,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(height: 4),
-                                        Text(
-                                          'Semester ${module['semester']}',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey[500],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                    ],
-
-                    // Semester Performance
-                    if (_semesterGPAs.isNotEmpty) ...[
-                      Text(
-                        'Semester Performance',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 12),
-                      ...(_semesterGPAs.keys.toList()..sort()).map((semester) {
-                        int gpaCredits = _semesterGpaCredits[semester] ?? 0;
-                        int passedNonGpa =
-                            _semesterPassedNonGpaModules[semester] ?? 0;
-                        int totalNonGpa =
-                            _semesterTotalNonGpaModules[semester] ?? 0;
-                        bool nonGpaComplete =
-                            totalNonGpa == 0 || passedNonGpa == totalNonGpa;
-
-                        return Card(
-                          margin: EdgeInsets.only(bottom: 12),
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Semester $semester',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _getGpaColor(
-                                          _semesterGPAs[semester]!,
-                                        ).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        'GPA: ${_semesterGPAs[semester]!.toStringAsFixed(2)}',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: _getGpaColor(
-                                            _semesterGPAs[semester]!,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 12),
-                                LinearProgressIndicator(
-                                  value: _semesterGPAs[semester]! / 4.0,
-                                  backgroundColor: Colors.grey[200],
-                                  color: _getGpaColor(_semesterGPAs[semester]!),
-                                  minHeight: 6,
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                                if (totalNonGpa > 0) ...[
-                                  SizedBox(height: 12),
-                                  Row(
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  GaugeChart(
+                                    value: _courseGPA,
+                                    maxValue: 4.0,
+                                    label: 'CGPA',
+                                    color: _getGpaColor(_courseGPA),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        nonGpaComplete
-                                            ? Icons.check_circle
-                                            : Icons.warning,
-                                        size: 14,
-                                        color: nonGpaComplete
-                                            ? Colors.green
-                                            : Colors.orange,
+                                      _buildGpaInfoRow(
+                                        'Current CGPA',
+                                        _courseGPA.toStringAsFixed(2),
+                                        _getGpaColor(_courseGPA),
                                       ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Non-GPA Modules: $passedNonGpa/$totalNonGpa passed',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: nonGpaComplete
-                                              ? Colors.green[700]
-                                              : Colors.orange[700],
-                                        ),
+                                      const SizedBox(height: 8),
+                                      _buildGpaInfoRow(
+                                        'Target',
+                                        '2.00',
+                                        AppColors.warning,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _buildGpaInfoRow(
+                                        'Status',
+                                        _getGpaLabel(_courseGPA),
+                                        _getGpaColor(_courseGPA),
                                       ),
                                     ],
                                   ),
                                 ],
+                              ),
+                              const SizedBox(height: 20),
+                              LinearProgressIndicator(
+                                value: _courseGPA / 4.0,
+                                backgroundColor: Colors.grey.shade200,
+                                color: _getGpaColor(_courseGPA),
+                                minHeight: 8,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Degree Status
+                      FadeInAnimation(
+                        delay: 350,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: _isDegreeEligible
+                                ? AppGradients.successGradient
+                                : AppGradients.warningGradient,
+                            borderRadius: BorderRadius.circular(
+                              AppConstants.borderRadiusLg,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isDegreeEligible
+                                      ? Icons.verified
+                                      : Icons.warning_amber,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Degree Status',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                      Text(
+                                        _degreeStatus,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                        );
-                      }).toList(),
-                      SizedBox(height: 20),
-                    ],
-
-                    // Suggestions
-                    if (_suggestions.isNotEmpty) ...[
-                      Text(
-                        'Suggestions',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(height: 12),
-                      Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Column(
-                            children: _suggestions.map((suggestion) {
-                              return Padding(
-                                padding: EdgeInsets.only(bottom: 12),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(
-                                      Icons.trending_up,
-                                      color: Colors.orange,
-                                      size: 20,
+                      const SizedBox(height: 20),
+
+                      // Failed Modules Section (Collapsible)
+                      if (_failedModules.isNotEmpty) ...[
+                        FadeInAnimation(
+                          delay: 400,
+                          child: GlassCard(
+                            padding: EdgeInsets.zero,
+                            child: Theme(
+                              data: Theme.of(
+                                context,
+                              ).copyWith(dividerColor: Colors.transparent),
+                              child: ExpansionTile(
+                                initiallyExpanded: _isFailedModulesExpanded,
+                                onExpansionChanged: (expanded) {
+                                  setState(() {
+                                    _isFailedModulesExpanded = expanded;
+                                  });
+                                },
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    gradient: AppGradients.errorGradient,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.cancel,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                                title: const Text(
+                                  'Failed Modules',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                trailing: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${_failedModules.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
                                     ),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        suggestion,
-                                        style: TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      children: _failedModules
+                                          .map(
+                                            (module) => _buildModuleAlert(
+                                              module,
+                                              AppColors.error,
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // Incomplete Modules Section (Collapsible)
+                      if (_incompleteModules.isNotEmpty) ...[
+                        FadeInAnimation(
+                          delay: 450,
+                          child: GlassCard(
+                            padding: EdgeInsets.zero,
+                            child: Theme(
+                              data: Theme.of(
+                                context,
+                              ).copyWith(dividerColor: Colors.transparent),
+                              child: ExpansionTile(
+                                initiallyExpanded: _isIncompleteModulesExpanded,
+                                onExpansionChanged: (expanded) {
+                                  setState(() {
+                                    _isIncompleteModulesExpanded = expanded;
+                                  });
+                                },
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    gradient: AppGradients.warningGradient,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.pending,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                                title: const Text(
+                                  'Incomplete Modules',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                trailing: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warning,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${_incompleteModules.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      children: _incompleteModules
+                                          .map(
+                                            (module) => _buildModuleAlert(
+                                              module,
+                                              AppColors.warning,
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // Semester Performance
+                      if (_semesterGPAs.isNotEmpty) ...[
+                        FadeInAnimation(
+                          delay: 500,
+                          child: GlassCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        gradient: AppGradients.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.school,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Semester Performance',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ],
                                 ),
-                              );
-                            }).toList(),
+                                const SizedBox(height: 16),
+                                ...(_semesterGPAs.keys.toList()..sort()).map(
+                                  (semester) => _buildSemesterCard(semester),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // Suggestions
+                      if (_suggestions.isNotEmpty) ...[
+                        FadeInAnimation(
+                          delay: 550,
+                          child: GlassCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        gradient: AppGradients.goldGradient,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.lightbulb,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'AI Suggestions',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                ..._suggestions.map(
+                                  (suggestion) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          margin: const EdgeInsets.only(top: 4),
+                                          width: 6,
+                                          height: 6,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.gold,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            suggestion,
+                                            style: TextStyle(fontSize: 13),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
+      ),
     );
   }
 
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              title,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
+  Widget _buildGpaInfoRow(String label, String value, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModuleAlert(Map<String, dynamic> module, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      module['moduleId'],
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: module['type'] == 'GPA'
+                            ? AppColors.success.withOpacity(0.1)
+                            : AppColors.warning.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        module['type'],
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: module['type'] == 'GPA'
+                              ? AppColors.success
+                              : AppColors.warning,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  module['moduleName'],
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  module['grade'],
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Semester ${module['semester']}',
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSemesterCard(int semester) {
+    double gpa = _semesterGPAs[semester]!;
+    int gpaCredits = _semesterGpaCredits[semester] ?? 0;
+    int passedNonGpa = _semesterPassedNonGpaModules[semester] ?? 0;
+    int totalNonGpa = _semesterTotalNonGpaModules[semester] ?? 0;
+    Color gpaColor = _getGpaColor(gpa);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, Colors.grey.shade50],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: gpaColor.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$semester',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Semester',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                      Text(
+                        '$semester',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [gpaColor, gpaColor.withOpacity(0.7)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'GPA: ${gpa.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: gpa / 4.0,
+            backgroundColor: Colors.grey.shade200,
+            color: gpaColor,
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(3),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.credit_card, size: 12, color: Colors.grey.shade500),
+              const SizedBox(width: 4),
+              Text(
+                '$gpaCredits credits',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+              const Spacer(),
+              if (totalNonGpa > 0)
+                Row(
+                  children: [
+                    Icon(
+                      passedNonGpa == totalNonGpa
+                          ? Icons.check_circle
+                          : Icons.warning,
+                      size: 12,
+                      color: passedNonGpa == totalNonGpa
+                          ? AppColors.success
+                          : AppColors.warning,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Non-GPA: $passedNonGpa/$totalNonGpa',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: passedNonGpa == totalNonGpa
+                            ? AppColors.success
+                            : AppColors.warning,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

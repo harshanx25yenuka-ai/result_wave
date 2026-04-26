@@ -5,32 +5,47 @@ import 'package:result_wave/models/student.dart';
 import 'package:result_wave/models/grade.dart';
 import 'package:result_wave/pages/edit_result_page.dart';
 import 'package:result_wave/services/database_service.dart';
+import 'package:result_wave/utils/constants.dart';
+import 'package:result_wave/utils/animations.dart';
+import 'package:result_wave/widgets/glass_card.dart';
 
 class ResultsPage extends StatefulWidget {
   final String studentId;
 
-  ResultsPage({required this.studentId});
+  const ResultsPage({Key? key, required this.studentId}) : super(key: key);
 
   @override
   _ResultsPageState createState() => _ResultsPageState();
 }
 
-class _ResultsPageState extends State<ResultsPage> {
+class _ResultsPageState extends State<ResultsPage>
+    with SingleTickerProviderStateMixin {
   List<Module> _modules = [];
   List<Result> _results = [];
   List<Grade> _grades = [];
   bool _isLoading = true;
+  String _searchQuery = '';
+  String? _selectedTypeFilter;
+  late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    )..forward();
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     Student student = (await DatabaseService().getStudents()).firstWhere(
       (s) => s.studentId == widget.studentId,
@@ -39,18 +54,15 @@ class _ResultsPageState extends State<ResultsPage> {
     _results = await DatabaseService().getResults();
     _grades = await DatabaseService().getGrades();
 
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
   }
 
   Color _getGradeColor(String grade) {
-    if (['F', 'F(CA)', 'F(ET)'].contains(grade)) return Colors.red;
-    if (['I', 'I(ET)', 'I(CA)'].contains(grade)) return Colors.orange;
-    if (['A+', 'A', 'A-'].contains(grade)) return Colors.green;
-    if (['B+', 'B', 'B-'].contains(grade)) return Colors.blue;
-    if (['C+', 'C', 'C-'].contains(grade)) return Colors.cyan;
-    if (grade == 'N/A') return Colors.grey;
+    if (['F', 'F(CA)', 'F(ET)'].contains(grade)) return AppColors.error;
+    if (['I', 'I(ET)', 'I(CA)'].contains(grade)) return AppColors.warning;
+    if (['A+', 'A', 'A-'].contains(grade)) return AppColors.success;
+    if (['B+', 'B', 'B-'].contains(grade)) return AppColors.primaryBlue;
+    if (['C+', 'C', 'C-'].contains(grade)) return AppColors.accentTeal;
     return Colors.grey;
   }
 
@@ -64,10 +76,7 @@ class _ResultsPageState extends State<ResultsPage> {
 
   bool _isNonGpaPassed(String grade) {
     if (grade == 'N/A') return false;
-    if (['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade)) {
-      return true;
-    }
-    return false;
+    return ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade);
   }
 
   void _editResult(String moduleId, String currentGrade) async {
@@ -78,9 +87,33 @@ class _ResultsPageState extends State<ResultsPage> {
             EditResultPage(moduleId: moduleId, currentGrade: currentGrade),
       ),
     );
-    if (result != null) {
-      _loadData();
+    if (result != null) _loadData();
+  }
+
+  List<Module> _getFilteredModules(List<Module> modules) {
+    var filtered = List<Module>.from(modules);
+
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered
+          .where(
+            (m) =>
+                m.moduleId.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                m.moduleName.toLowerCase().contains(_searchQuery.toLowerCase()),
+          )
+          .toList();
     }
+
+    if (_selectedTypeFilter != null) {
+      filtered = filtered
+          .where(
+            (m) =>
+                (_selectedTypeFilter == 'GPA' && m.isGpaModule) ||
+                (_selectedTypeFilter == 'Non-GPA' && m.isNonGpaModule),
+          )
+          .toList();
+    }
+
+    return filtered;
   }
 
   @override
@@ -88,291 +121,354 @@ class _ResultsPageState extends State<ResultsPage> {
     var semesters = _modules.map((m) => m.semester).toSet().toList()..sort();
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('Results'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 0,
+        title: const Text('Results'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => _showSearchDialog(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () => _showFilterDialog(),
+          ),
+        ],
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : semesters.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.school_outlined,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'No Results Available',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Your academic results will appear here once available.',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: Theme.of(context).brightness == Brightness.dark
+              ? AppGradients.darkBackgroundGradient
+              : AppGradients.backgroundGradient,
+        ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : semesters.isEmpty
+            ? _buildEmptyState()
+            : RefreshIndicator(
+                onRefresh: _loadData,
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: semesters.length,
+                  itemBuilder: (context, index) {
+                    int semester = semesters[index];
+                    var semesterModules = _modules
+                        .where((m) => m.semester == semester)
+                        .toList();
+                    var filteredModules = _getFilteredModules(semesterModules);
+
+                    if (filteredModules.isEmpty) return const SizedBox();
+
+                    return FadeInAnimation(
+                      delay: index * 50,
+                      child: _buildSemesterCard(semester, filteredModules),
+                    );
+                  },
+                ),
               ),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: ListView.builder(
-                padding: EdgeInsets.all(16),
-                itemCount: semesters.length,
-                itemBuilder: (context, index) {
-                  int semester = semesters[index];
-                  var semesterModules = _modules
-                      .where((m) => m.semester == semester)
-                      .toList();
+      ),
+    );
+  }
 
-                  // Sort modules by grade (highest to lowest)
-                  semesterModules.sort((a, b) {
-                    var resultA = _results.firstWhere(
-                      (r) => r.moduleId == a.moduleId,
-                      orElse: () => Result(moduleId: a.moduleId, grade: 'N/A'),
-                    );
-                    var resultB = _results.firstWhere(
-                      (r) => r.moduleId == b.moduleId,
-                      orElse: () => Result(moduleId: b.moduleId, grade: 'N/A'),
-                    );
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.school_outlined, size: 80, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          const Text(
+            'No Results Available',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your academic results will appear here',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
 
-                    int pointsA = _getGradePoints(resultA.grade);
-                    int pointsB = _getGradePoints(resultB.grade);
+  Widget _buildSemesterCard(int semester, List<Module> modules) {
+    int nonGpaTotal = modules.where((m) => m.isNonGpaModule).length;
+    int nonGpaPassed = modules.where((m) => m.isNonGpaModule).where((m) {
+      var result = _results.firstWhere(
+        (r) => r.moduleId == m.moduleId,
+        orElse: () => Result(moduleId: m.moduleId, grade: 'N/A'),
+      );
+      return _isNonGpaPassed(result.grade);
+    }).length;
+    bool allNonGpaPassed = nonGpaTotal == 0 || nonGpaPassed == nonGpaTotal;
 
-                    // Sort by grade points descending (highest first)
-                    return pointsB.compareTo(pointsA);
-                  });
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          leading: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: allNonGpaPassed
+                  ? AppGradients.primary
+                  : AppGradients.warningGradient,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                '$semester',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          title: Text(
+            'Semester $semester',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${modules.length} modules'),
+              if (nonGpaTotal > 0)
+                Text(
+                  'Non-GPA: $nonGpaPassed/$nonGpaTotal passed',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: allNonGpaPassed
+                        ? AppColors.success
+                        : AppColors.warning,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+          children: modules.map((module) {
+            var result = _results.firstWhere(
+              (r) => r.moduleId == module.moduleId,
+              orElse: () => Result(moduleId: module.moduleId, grade: 'N/A'),
+            );
+            bool isNonGpa = module.isNonGpaModule;
+            bool isPassed = isNonGpa ? _isNonGpaPassed(result.grade) : true;
+            int gradePoints = _getGradePoints(result.grade);
+            Color gradeColor = _getGradeColor(result.grade);
 
-                  // Calculate pass status for non-GPA modules in this semester
-                  int nonGpaTotal = semesterModules
-                      .where((m) => m.isNonGpaModule)
-                      .length;
-                  int nonGpaPassed = semesterModules
-                      .where((m) => m.isNonGpaModule)
-                      .where((m) {
-                        var result = _results.firstWhere(
-                          (r) => r.moduleId == m.moduleId,
-                          orElse: () =>
-                              Result(moduleId: m.moduleId, grade: 'N/A'),
-                        );
-                        return _isNonGpaPassed(result.grade);
-                      })
-                      .length;
-
-                  bool allNonGpaPassed =
-                      nonGpaTotal == 0 || nonGpaPassed == nonGpaTotal;
-
-                  return Card(
-                    margin: EdgeInsets.only(bottom: 16),
-                    child: Theme(
-                      data: Theme.of(
-                        context,
-                      ).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        leading: Container(
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _editResult(module.moduleId, result.grade),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Container(
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: allNonGpaPassed
-                                ? Colors.blue.withOpacity(0.1)
-                                : Colors.orange.withOpacity(0.1),
+                            gradient: AppGradients.primary,
                             shape: BoxShape.circle,
                           ),
                           child: Center(
                             child: Text(
-                              '$semester',
-                              style: TextStyle(
+                              module.credits.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                color: allNonGpaPassed
-                                    ? Colors.blue
-                                    : Colors.orange,
+                                fontSize: 12,
                               ),
                             ),
                           ),
                         ),
-                        title: Text(
-                          'Semester $semester',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${semesterModules.length} modules'),
-                            if (nonGpaTotal > 0)
-                              Text(
-                                'Non-GPA: $nonGpaPassed/$nonGpaTotal passed',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: allNonGpaPassed
-                                      ? Colors.green
-                                      : Colors.orange,
-                                ),
-                              ),
-                          ],
-                        ),
-                        children: semesterModules.map((module) {
-                          var result = _results.firstWhere(
-                            (r) => r.moduleId == module.moduleId,
-                            orElse: () =>
-                                Result(moduleId: module.moduleId, grade: 'N/A'),
-                          );
-                          bool isNonGpa = module.isNonGpaModule;
-                          bool isPassed = isNonGpa
-                              ? _isNonGpaPassed(result.grade)
-                              : true;
-                          int gradePoints = _getGradePoints(result.grade);
-
-                          return Container(
-                            margin: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.grey[200]!,
-                                  width: 0.5,
-                                ),
-                              ),
-                            ),
-                            child: ListTile(
-                              leading: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: _getGradeColor(result.grade),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              title: Row(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          module.moduleId,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        if (isNonGpa)
-                                          Container(
-                                            margin: EdgeInsets.only(top: 2),
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange.withOpacity(
-                                                0.1,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              'Non-GPA',
-                                              style: TextStyle(
-                                                fontSize: 9,
-                                                color: Colors.orange,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
+                                  Text(
+                                    module.moduleId,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
                                     ),
                                   ),
+                                  const SizedBox(width: 6),
+                                  if (isNonGpa)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.warning.withOpacity(
+                                          0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'Non-GPA',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: AppColors.warning,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
-                              subtitle: Text(
+                              const SizedBox(height: 2),
+                              Text(
                                 module.moduleName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              trailing: Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _getGradeColor(
-                                    result.grade,
-                                  ).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: isNonGpa && !isPassed
-                                      ? Border.all(
-                                          color: Colors.orange,
-                                          width: 1,
-                                        )
-                                      : null,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          result.grade,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: _getGradeColor(result.grade),
-                                          ),
-                                        ),
-                                        if (gradePoints > 0)
-                                          Text(
-                                            '${(gradePoints / 10).toStringAsFixed(1)} pts',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.grey[500],
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    if (isNonGpa && !isPassed)
-                                      Padding(
-                                        padding: EdgeInsets.only(left: 8),
-                                        child: Icon(
-                                          Icons.warning,
-                                          size: 14,
-                                          color: Colors.orange,
-                                        ),
-                                      ),
-                                    SizedBox(width: 8),
-                                    Container(
-                                      width: 1,
-                                      height: 20,
-                                      color: Colors.grey[300],
-                                    ),
-                                    SizedBox(width: 8),
-                                    Icon(
-                                      Icons.edit,
-                                      size: 18,
-                                      color: Colors.grey[500],
-                                    ),
-                                  ],
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [gradeColor, gradeColor.withOpacity(0.7)],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                result.grade,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
                               ),
-                              onTap: () =>
-                                  _editResult(module.moduleId, result.grade),
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                              if (gradePoints > 0)
+                                Text(
+                                  '${(gradePoints / 10).toStringAsFixed(1)} pts',
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: Colors.grey.shade400,
+                        ),
+                      ],
                     ),
-                  );
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showSearchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Search Modules',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Module code or name',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() => _searchQuery = value);
+                  Navigator.pop(context);
                 },
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Filter by Type',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 16),
+            _buildFilterOption('All Modules', null),
+            _buildFilterOption('GPA Modules', 'GPA'),
+            _buildFilterOption('Non-GPA Modules', 'Non-GPA'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterOption(String label, String? value) {
+    bool isSelected = _selectedTypeFilter == value;
+    return ListTile(
+      leading: Radio<String?>(
+        value: value,
+        groupValue: _selectedTypeFilter,
+        onChanged: (v) {
+          setState(() => _selectedTypeFilter = v);
+          Navigator.pop(context);
+        },
+        activeColor: AppColors.primaryBlue,
+      ),
+      title: Text(label),
+      trailing: isSelected
+          ? const Icon(Icons.check, color: AppColors.primaryBlue)
+          : null,
     );
   }
 }
