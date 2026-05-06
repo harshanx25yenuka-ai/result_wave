@@ -21,12 +21,21 @@ class InsightsPage extends StatefulWidget {
 class _InsightsScreenState extends State<InsightsPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  late PageController _pageController;
   List<Map<String, dynamic>> _allSuggestions = [];
   Map<String, List<Map<String, dynamic>>> _categorizedSuggestions = {};
   bool _isLoading = true;
   String _studentName = '';
   String _courseName = '';
-  double _courseGPA = 0.0;
+  int _currentPageIndex = 0;
+
+  // Category order
+  final List<String> _categoryOrder = [
+    'critical',
+    'warning',
+    'info',
+    'success',
+  ];
 
   // Category expansion states
   Map<String, bool> _categoryExpanded = {
@@ -43,12 +52,14 @@ class _InsightsScreenState extends State<InsightsPage>
       duration: const Duration(milliseconds: 800),
       vsync: this,
     )..forward();
+    _pageController = PageController();
     _loadInsights();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -118,7 +129,6 @@ class _InsightsScreenState extends State<InsightsPage>
     double courseGPA = totalCourseCredits > 0
         ? totalCoursePoints / totalCourseCredits
         : 0.0;
-    _courseGPA = courseGPA;
 
     Map<int, int> semesterPassedNonGpa = {};
     Map<int, int> semesterTotalNonGpa = {};
@@ -501,9 +511,22 @@ class _InsightsScreenState extends State<InsightsPage>
     }
   }
 
+  void _onPageChanged(int index) {
+    setState(() {
+      _currentPageIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Filter out empty categories for page view
+    List<String> availableCategories = _categoryOrder.where((category) {
+      return (_categorizedSuggestions[category] ?? []).isNotEmpty;
+    }).toList();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -513,29 +536,7 @@ class _InsightsScreenState extends State<InsightsPage>
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              gradient: AppGradients.goldGradient,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.star, size: 16, color: Colors.white),
-                const SizedBox(width: 4),
-                Text(
-                  _courseGPA.toStringAsFixed(2),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        // Removed CGPA display from app bar
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -546,237 +547,299 @@ class _InsightsScreenState extends State<InsightsPage>
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _allSuggestions.isEmpty
-            ? _buildEmptyState(isDark)
-            : RefreshIndicator(
-                onRefresh: _loadInsights,
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Summary Header
-                      _buildSummaryHeader(isDark),
-                      const SizedBox(height: 20),
-
-                      // Categorized Sections
-                      ..._buildCategorySections(isDark),
-                    ],
+            ? _buildEmptyState(isDark, screenHeight)
+            : Column(
+                children: [
+                  // Summary Header - Responsive height
+                  SizedBox(
+                    height: screenHeight * 0.25,
+                    child: _buildSummaryHeader(isDark, screenWidth),
                   ),
-                ),
+                  // Page Indicator
+                  if (availableCategories.length > 1)
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(availableCategories.length, (
+                          index,
+                        ) {
+                          bool isActive = _currentPageIndex == index;
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: isActive ? 24 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? _getCategoryColor(
+                                      availableCategories[index],
+                                    )
+                                  : (isDark
+                                        ? Colors.grey.shade600
+                                        : Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  // PageView for Swipe Gesture
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: _onPageChanged,
+                      children: availableCategories.map((category) {
+                        List<Map<String, dynamic>> items =
+                            _categorizedSuggestions[category] ?? [];
+                        return _buildCategoryPage(
+                          category,
+                          items,
+                          isDark,
+                          screenHeight,
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
               ),
       ),
     );
   }
 
-  Widget _buildSummaryHeader(bool isDark) {
+  Widget _buildSummaryHeader(bool isDark, double screenWidth) {
     int criticalCount = _categorizedSuggestions['critical']?.length ?? 0;
     int warningCount = _categorizedSuggestions['warning']?.length ?? 0;
     int infoCount = _categorizedSuggestions['info']?.length ?? 0;
     int successCount = _categorizedSuggestions['success']?.length ?? 0;
 
-    return GlassCard(
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: GlassCard(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: AppGradients.goldGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'AI Analysis Summary',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Based on your academic performance',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildSummaryChip(
+                  'Critical',
+                  criticalCount,
+                  AppColors.error,
+                  isDark,
+                  screenWidth,
+                ),
+                _buildSummaryChip(
+                  'Warning',
+                  warningCount,
+                  AppColors.warning,
+                  isDark,
+                  screenWidth,
+                ),
+                _buildSummaryChip(
+                  'Info',
+                  infoCount,
+                  AppColors.info,
+                  isDark,
+                  screenWidth,
+                ),
+                _buildSummaryChip(
+                  'Success',
+                  successCount,
+                  AppColors.success,
+                  isDark,
+                  screenWidth,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryChip(
+    String label,
+    int count,
+    Color color,
+    bool isDark,
+    double screenWidth,
+  ) {
+    double chipWidth = (screenWidth - 64) / 4; // Responsive width calculation
+
+    return Container(
+      width: chipWidth,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: AppGradients.goldGradient,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.auto_awesome,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'AI Analysis Summary',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Based on your academic performance',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              _buildSummaryChip(
-                'Critical',
-                criticalCount,
-                AppColors.error,
-                isDark,
-              ),
-              const SizedBox(width: 8),
-              _buildSummaryChip(
-                'Warning',
-                warningCount,
-                AppColors.warning,
-                isDark,
-              ),
-              const SizedBox(width: 8),
-              _buildSummaryChip('Info', infoCount, AppColors.info, isDark),
-              const SizedBox(width: 8),
-              _buildSummaryChip(
-                'Success',
-                successCount,
-                AppColors.success,
-                isDark,
-              ),
-            ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryChip(String label, int count, Color color, bool isDark) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              count.toString(),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildCategorySections(bool isDark) {
-    List<Widget> sections = [];
-    List<String> order = ['critical', 'warning', 'info', 'success'];
-
-    for (var category in order) {
-      List<Map<String, dynamic>> items =
-          _categorizedSuggestions[category] ?? [];
-      if (items.isNotEmpty) {
-        sections.add(
-          FadeInAnimation(
-            delay: 100 * order.indexOf(category),
-            child: _buildCategorySection(category, items, isDark),
-          ),
-        );
-        sections.add(const SizedBox(height: 20));
-      }
-    }
-
-    return sections;
-  }
-
-  Widget _buildCategorySection(
+  Widget _buildCategoryPage(
     String category,
     List<Map<String, dynamic>> items,
     bool isDark,
+    double screenHeight,
   ) {
     Color categoryColor = _getCategoryColor(category);
     IconData categoryIcon = _getCategoryIcon(category);
     String categoryTitle = _getCategoryTitle(category);
     String categoryDescription = _getCategoryDescription(category);
 
-    return GlassCard(
-      padding: EdgeInsets.zero,
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: _categoryExpanded[category] ?? true,
-          onExpansionChanged: (expanded) {
-            setState(() {
-              _categoryExpanded[category] = expanded;
-            });
-          },
-          leading: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [categoryColor, categoryColor.withOpacity(0.7)],
-              ),
-              shape: BoxShape.circle,
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Category Header Card
+          GlassCard(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            categoryColor,
+                            categoryColor.withOpacity(0.7),
+                          ],
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(categoryIcon, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            categoryTitle,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: categoryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            categoryDescription,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: categoryColor,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${items.length}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            child: Icon(categoryIcon, color: Colors.white, size: 22),
           ),
-          title: Text(
-            categoryTitle,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: categoryColor,
-            ),
-          ),
-          subtitle: Text(
-            categoryDescription,
-            style: TextStyle(
-              fontSize: 11,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-          ),
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: categoryColor,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${items.length}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: items
-                    .map(
-                      (item) => _buildInsightCard(item, categoryColor, isDark),
-                    )
-                    .toList(),
-              ),
-            ),
-          ],
-        ),
+          const SizedBox(height: 16),
+          // Insights List
+          ...items
+              .map(
+                (item) => Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: _buildInsightCard(
+                    item,
+                    categoryColor,
+                    isDark,
+                    screenHeight,
+                  ),
+                ),
+              )
+              .toList(),
+        ],
       ),
     );
   }
@@ -785,31 +848,15 @@ class _InsightsScreenState extends State<InsightsPage>
     Map<String, dynamic> insight,
     Color categoryColor,
     bool isDark,
+    double screenHeight,
   ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+    return GlassCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  categoryColor.withOpacity(0.15),
-                  AppColors.surfaceDark.withOpacity(0.8),
-                ]
-              : [
-                  categoryColor.withOpacity(0.08),
-                  Colors.white.withOpacity(0.95),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: categoryColor.withOpacity(0.3), width: 1),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
@@ -834,7 +881,7 @@ class _InsightsScreenState extends State<InsightsPage>
                         color: categoryColor,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       insight['message'],
                       style: TextStyle(
@@ -850,7 +897,7 @@ class _InsightsScreenState extends State<InsightsPage>
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -878,7 +925,9 @@ class _InsightsScreenState extends State<InsightsPage>
           if (insight.containsKey('semester') || insight.containsKey('credits'))
             Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Row(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   if (insight.containsKey('semester'))
                     Container(
@@ -910,9 +959,6 @@ class _InsightsScreenState extends State<InsightsPage>
                         ],
                       ),
                     ),
-                  if (insight.containsKey('semester') &&
-                      insight.containsKey('credits'))
-                    const SizedBox(width: 8),
                   if (insight.containsKey('credits') && insight['credits'] > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -951,34 +997,42 @@ class _InsightsScreenState extends State<InsightsPage>
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
+  Widget _buildEmptyState(bool isDark, double screenHeight) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.auto_awesome,
-            size: 80,
-            color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Container(
+          height: screenHeight * 0.7,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                size: 80,
+                color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No Insights Available',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Complete more modules to get AI-powered insights',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            'No Insights Available',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Complete more modules to get AI-powered insights',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
