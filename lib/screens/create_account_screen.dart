@@ -8,6 +8,7 @@ import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
+import 'package:flutter/services.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   @override
@@ -26,6 +27,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   late AnimationController _controller;
   int _currentStep = 0;
 
+  String _detectedCourse = '';
+  bool _isIdValid = false;
+  String _idError = '';
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +39,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       vsync: this,
     )..forward();
     _loadCourses();
+
+    // Add listener to validate student ID
+    _studentIdController.addListener(_validateAndDetectCourse);
   }
 
   @override
@@ -41,7 +49,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     _controller.dispose();
     _studentIdController.dispose();
     _studentNameController.dispose();
+    _studentIdController.removeListener(_validateAndDetectCourse);
     super.dispose();
+  }
+
+  void _validateAndDetectCourse() {
+    final text = _studentIdController.text;
+
+    if (text.trim().isEmpty) {
+      _isIdValid = false;
+      _detectedCourse = '';
+      _idError = '';
+      setState(() {});
+      return;
+    }
+
+    final error = Student.validateStudentId(text);
+
+    if (error == null) {
+      _isIdValid = true;
+      _idError = '';
+      final prefix = Student.getCoursePrefixFromId(text);
+      _detectedCourse = Student.getCourseNameFromPrefix(prefix);
+    } else {
+      _isIdValid = false;
+      _detectedCourse = '';
+      _idError = error;
+    }
+    setState(() {});
   }
 
   Future<void> _loadCourses() async {
@@ -50,7 +85,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       final courses = await DatabaseService().getCourses();
       setState(() {
         _courses = courses;
-        if (courses.isNotEmpty) _selectedCourseId = courses.first.courseId;
         _isLoading = false;
       });
     } catch (e) {
@@ -60,14 +94,44 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   }
 
   Future<void> _createAccount() async {
-    if (_formKey.currentState!.validate() && _selectedCourseId != null) {
-      setState(() => _isCreating = true);
+    final studentId = _studentIdController.text.trim().toUpperCase();
+
+    // Validate student ID format
+    final idError = Student.validateStudentId(studentId);
+    if (idError != null) {
+      _showMessage(idError, isError: true);
+      return;
+    }
+
+    if (_formKey.currentState!.validate()) {
+      final prefix = Student.getCoursePrefixFromId(studentId);
+      final courseIdFromPrefix = Student.getCourseIdFromPrefix(prefix);
+
+      if (courseIdFromPrefix.isEmpty) {
+        _showMessage(
+          'Invalid student ID format. Cannot determine course.',
+          isError: true,
+        );
+        return;
+      }
+
+      // Find matching course
+      final matchedCourse = _courses.firstWhere(
+        (c) => c.courseId == courseIdFromPrefix,
+        orElse: () =>
+            throw Exception('No matching course found for prefix $prefix'),
+      );
+
+      setState(() {
+        _selectedCourseId = matchedCourse.courseId;
+        _isCreating = true;
+      });
 
       try {
         await DatabaseService().insertStudent(
           Student(
-            studentId: _studentIdController.text.toUpperCase(),
-            studentName: _studentNameController.text.toUpperCase(),
+            studentId: studentId,
+            studentName: _studentNameController.text.trim().toUpperCase(),
             courseId: _selectedCourseId!,
           ),
         );
@@ -187,7 +251,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                 _buildStepIndicator(),
                                 const SizedBox(height: 24),
                                 if (_currentStep == 0) _buildStudentInfoStep(),
-                                if (_currentStep == 1) _buildCourseStep(),
+                                if (_currentStep == 1) _buildCourseInfo(),
                                 const SizedBox(height: 24),
                                 Row(
                                   children: [
@@ -219,9 +283,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                 if (_currentStep == 1) {
                                                   _createAccount();
                                                 } else {
-                                                  setState(
-                                                    () => _currentStep++,
-                                                  );
+                                                  // Validate before proceeding
+                                                  if (_studentIdController.text
+                                                      .trim()
+                                                      .isEmpty) {
+                                                    _showMessage(
+                                                      'Please enter Student ID',
+                                                      isError: true,
+                                                    );
+                                                  } else if (!_isIdValid) {
+                                                    _showMessage(
+                                                      _idError.isEmpty
+                                                          ? 'Please enter a valid Student ID'
+                                                          : _idError,
+                                                      isError: true,
+                                                    );
+                                                  } else if (_studentNameController
+                                                      .text
+                                                      .trim()
+                                                      .isEmpty) {
+                                                    _showMessage(
+                                                      'Please enter Student Name',
+                                                      isError: true,
+                                                    );
+                                                  } else {
+                                                    setState(
+                                                      () => _currentStep++,
+                                                    );
+                                                  }
                                                 }
                                               },
                                         style: ElevatedButton.styleFrom(
@@ -286,7 +375,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 : Colors.grey.shade300,
           ),
         ),
-        _buildStepCircle(1, 'Course'),
+        _buildStepCircle(1, 'Verify'),
       ],
     );
   }
@@ -336,16 +425,78 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           controller: _studentIdController,
           decoration: InputDecoration(
             labelText: 'Student ID',
+            hintText: 'SOF/21/B1/11',
+            helperText:
+                'Format: XXX/XX/BX/XX\nXXX = SOF, MMW, or NET | BX = B1 or B2',
             prefixIcon: Icon(Icons.badge, color: AppColors.primaryBlue),
+            suffixIcon: _isIdValid
+                ? Icon(Icons.check_circle, color: AppColors.success)
+                : (_studentIdController.text.trim().isNotEmpty
+                      ? Icon(Icons.error, color: AppColors.error)
+                      : null),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
             filled: true,
             fillColor: Colors.grey.shade50,
+            errorText:
+                _studentIdController.text.trim().isNotEmpty &&
+                    !_isIdValid &&
+                    _idError.isNotEmpty
+                ? _idError
+                : null,
           ),
-          validator: (value) => value!.isEmpty ? 'Enter Student ID' : null,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Please enter Student ID';
+            }
+            return Student.validateStudentId(value);
+          },
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [
+            // Only allow letters, numbers, and slashes
+            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9/]')),
+          ],
         ),
+        const SizedBox(height: 12),
+        if (_detectedCourse.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.success.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.verified, color: AppColors.success, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Valid Student ID',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.success,
+                        ),
+                      ),
+                      Text(
+                        'Course: $_detectedCourse',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 16),
         TextFormField(
           controller: _studentNameController,
@@ -359,35 +510,61 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             filled: true,
             fillColor: Colors.grey.shade50,
           ),
-          validator: (value) => value!.isEmpty ? 'Enter Student Name' : null,
+          validator: (value) => value == null || value.trim().isEmpty
+              ? 'Enter Student Name'
+              : null,
         ),
       ],
     );
   }
 
-  Widget _buildCourseStep() {
+  Widget _buildCourseInfo() {
+    final studentId = _studentIdController.text.trim().toUpperCase();
+    final prefix = Student.getCoursePrefixFromId(studentId);
+    final batch = Student.getBatchFromId(studentId);
+    final courseName = Student.getCourseNameFromPrefix(prefix);
+    String courseDescription;
+
+    switch (prefix) {
+      case 'SOF':
+        courseDescription =
+            'Focus on software development, architecture, enterprise systems, and application programming';
+        break;
+      case 'MMW':
+        courseDescription =
+            'Focus on multimedia design, animation, video production, and web technologies';
+        break;
+      case 'NET':
+        courseDescription =
+            'Focus on network infrastructure, security protocols, and system administration';
+        break;
+      default:
+        courseDescription =
+            'Please enter a valid Student ID with SOF, MMW, or NET prefix';
+    }
+
     return Column(
       children: [
-        DropdownButtonFormField<String>(
-          decoration: InputDecoration(
-            labelText: 'Select Course',
-            prefixIcon: Icon(Icons.school, color: AppColors.primaryBlue),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: Colors.grey.shade50,
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: AppGradients.successGradient,
+            borderRadius: BorderRadius.circular(16),
           ),
-          value: _selectedCourseId,
-          items: _courses.map((course) {
-            return DropdownMenuItem<String>(
-              value: course.courseId,
-              child: Text(course.courseName),
-            );
-          }).toList(),
-          onChanged: (value) => setState(() => _selectedCourseId = value),
-          validator: (value) => value == null ? 'Select a course' : null,
+          child: Column(
+            children: [
+              const Icon(Icons.verified, color: Colors.white, size: 48),
+              const SizedBox(height: 12),
+              Text(
+                'Course Matched!',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         Container(
@@ -396,14 +573,139 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             color: AppColors.primaryBlue.withOpacity(0.05),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline, color: AppColors.primaryBlue),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Your modules and results will be automatically configured based on your selected course.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.badge,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Student ID',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        Text(
+                          studentId,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.school,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Course',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        Text(
+                          courseName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (batch.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentTeal,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.people,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Batch',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                          Text(
+                            batch,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: AppColors.info, size: 18),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        courseDescription,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

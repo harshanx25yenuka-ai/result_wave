@@ -5,6 +5,8 @@ import 'package:result_wave/providers/theme_provider.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/pdf_service.dart';
 import 'package:result_wave/services/supabase_service.dart';
+import 'package:result_wave/services/auth_service.dart';
+import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -29,13 +31,13 @@ class _SettingsPageState extends State<SettingsPage>
   bool _isExporting = false;
   late AnimationController _animationController;
 
-  // Backup related variables
   bool _isBackingUp = false;
   bool _isRestoring = false;
   Map<String, dynamic>? _latestBackup;
   List<Map<String, dynamic>> _backupHistory = [];
   bool _isLoadingBackups = false;
   final SupabaseService _supabaseService = SupabaseService();
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -113,8 +115,9 @@ class _SettingsPageState extends State<SettingsPage>
 
       if (result['success']) {
         await _loadBackupInfo();
+        final action = result['isUpdate'] == true ? 'updated' : 'created';
         _showMessage(
-          'Backup created successfully!\nDate: ${DateFormat('yyyy-MM-dd HH:mm').format(result['backupDate'])}\nSize: ${_supabaseService.formatFileSize(result['backupSize'])}',
+          'Backup $action successfully!\nDate: ${DateFormat('yyyy-MM-dd HH:mm').format(result['backupDate'])}\nSize: ${_supabaseService.formatFileSize(result['backupSize'])}',
           isError: false,
         );
       } else {
@@ -127,96 +130,13 @@ class _SettingsPageState extends State<SettingsPage>
     }
   }
 
-  Future<void> _restoreBackup(Map<String, dynamic> backup) async {
+  Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Restore Backup'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Are you sure you want to restore this backup?'),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('⚠️ This will overwrite your current data.'),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Date: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(backup['backup_date']))}',
-                  ),
-                  Text(
-                    'Size: ${_supabaseService.formatFileSize(backup['backup_size'])}',
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.warning,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Restore'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isRestoring = true);
-
-    try {
-      final db = await DatabaseService().database;
-      final success = await _supabaseService.restoreBackup(backup['id'], db);
-
-      if (success) {
-        _showMessage('Data restored successfully!', isError: false);
-        await Future.delayed(const Duration(seconds: 1));
-        // Reload the app data
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SettingsPage(studentId: widget.studentId),
-          ),
-        );
-      } else {
-        _showMessage('Restore failed', isError: true);
-      }
-    } catch (e) {
-      _showMessage('Error restoring backup: $e', isError: true);
-    } finally {
-      setState(() => _isRestoring = false);
-    }
-  }
-
-  Future<void> _deleteBackup(Map<String, dynamic> backup) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Backup'),
-        content: const Text(
-          'Are you sure you want to delete this backup? This action cannot be undone.',
-        ),
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -230,20 +150,20 @@ class _SettingsPageState extends State<SettingsPage>
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: const Text('Delete'),
+            child: const Text('Logout'),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
-
-    final success = await _supabaseService.deleteBackup(backup['id']);
-    if (success) {
-      await _loadBackupInfo();
-      _showMessage('Backup deleted successfully', isError: false);
-    } else {
-      _showMessage('Failed to delete backup', isError: true);
+    if (confirm == true) {
+      await _authService.logout();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
+      }
     }
   }
 
@@ -307,17 +227,18 @@ class _SettingsPageState extends State<SettingsPage>
                           final backupDate = DateTime.parse(
                             backup['backup_date'],
                           );
-                          final isLatest = index == 0;
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              gradient: isLatest ? AppGradients.primary : null,
-                              color: isLatest ? null : Colors.grey.shade50,
+                              gradient: index == 0
+                                  ? AppGradients.primary
+                                  : null,
+                              color: index == 0 ? null : Colors.grey.shade50,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isLatest
+                                color: index == 0
                                     ? Colors.transparent
                                     : Colors.grey.shade200,
                               ),
@@ -328,7 +249,7 @@ class _SettingsPageState extends State<SettingsPage>
                                   width: 45,
                                   height: 45,
                                   decoration: BoxDecoration(
-                                    color: isLatest
+                                    color: index == 0
                                         ? Colors.white.withOpacity(0.2)
                                         : AppColors.primaryBlue.withOpacity(
                                             0.1,
@@ -337,7 +258,7 @@ class _SettingsPageState extends State<SettingsPage>
                                   ),
                                   child: Icon(
                                     Icons.backup,
-                                    color: isLatest
+                                    color: index == 0
                                         ? Colors.white
                                         : AppColors.primaryBlue,
                                   ),
@@ -348,7 +269,7 @@ class _SettingsPageState extends State<SettingsPage>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      if (isLatest)
+                                      if (index == 0)
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 8,
@@ -375,7 +296,7 @@ class _SettingsPageState extends State<SettingsPage>
                                         ).format(backupDate),
                                         style: TextStyle(
                                           fontWeight: FontWeight.w600,
-                                          color: isLatest
+                                          color: index == 0
                                               ? Colors.white
                                               : Colors.black87,
                                         ),
@@ -385,35 +306,13 @@ class _SettingsPageState extends State<SettingsPage>
                                         'Size: ${_supabaseService.formatFileSize(backup['backup_size'])}',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: isLatest
+                                          color: index == 0
                                               ? Colors.white70
                                               : Colors.grey.shade600,
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.restore,
-                                        color: isLatest
-                                            ? Colors.white
-                                            : AppColors.warning,
-                                      ),
-                                      onPressed: () => _restoreBackup(backup),
-                                    ),
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.delete,
-                                        color: isLatest
-                                            ? Colors.white70
-                                            : AppColors.error,
-                                      ),
-                                      onPressed: () => _deleteBackup(backup),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),
@@ -494,7 +393,16 @@ class _SettingsPageState extends State<SettingsPage>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+            tooltip: 'Logout',
+          ),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: Theme.of(context).brightness == Brightness.dark
@@ -546,7 +454,7 @@ class _SettingsPageState extends State<SettingsPage>
                   ),
                   const SizedBox(height: 20),
 
-                  // Backup Section
+                  // Cloud Backup Section
                   FadeInAnimation(
                     delay: 150,
                     child: _buildSectionHeader(
@@ -655,7 +563,7 @@ class _SettingsPageState extends State<SettingsPage>
                                   label: Text(
                                     _isBackingUp
                                         ? 'Backing up...'
-                                        : 'Create Backup',
+                                        : 'Sync Backup',
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primaryBlue,

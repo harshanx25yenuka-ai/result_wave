@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:result_wave/screens/create_account_screen.dart';
 import 'package:result_wave/screens/login_screen.dart';
+import 'package:result_wave/screens/home_screen.dart';
+import 'package:result_wave/services/auth_service.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
@@ -15,6 +17,7 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -46,20 +49,44 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _navigate() async {
     await Future.delayed(const Duration(milliseconds: 2000));
-    final students = await DatabaseService().getStudents();
+
+    final isLoggedIn = await _authService.isLoggedIn();
 
     if (!mounted) return;
 
-    if (students.isEmpty) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => CreateAccountScreen()),
-      );
+    if (isLoggedIn) {
+      final studentId = await _authService.getCurrentStudentId();
+      final students = await DatabaseService().getStudents();
+      final existingStudent = students.any((s) => s.studentId == studentId);
+
+      if (existingStudent && studentId != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(studentId: studentId),
+          ),
+        );
+      } else {
+        // Invalid session, go to login
+        await _authService.clearLoginData();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
+      }
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginScreen()),
-      );
+      final students = await DatabaseService().getStudents();
+      if (students.isEmpty && mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => CreateAccountScreen()),
+        );
+      } else if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
+      }
     }
   }
 

@@ -11,28 +11,13 @@ class SupabaseService {
 
   Future<void> initSupabase() async {
     await Supabase.initialize(
-      url:
-          'https://qeteyfiutignsgjchowj.supabase.co', // Replace with your Supabase URL
+      url: 'https://qeteyfiutignsgjchowj.supabase.co',
       anonKey:
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldGV5Zml1dGlnbnNnamNob3dqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTUxMzEsImV4cCI6MjA5Mjc5MTEzMX0.PdocPQeBGBw2Pt4hILZWPxYmqy3yx6f2HOogvdgwlb0', // Replace with your Supabase anon key
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldGV5Zml1dGlnbnNnamNob3dqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTUxMzEsImV4cCI6MjA5Mjc5MTEzMX0.PdocPQeBGBw2Pt4hILZWPxYmqy3yx6f2HOogvdgwlb0',
     );
   }
 
   SupabaseClient get client => Supabase.instance.client;
-
-  // Create backup table if not exists (run this once in Supabase SQL editor)
-  /*
-  CREATE TABLE IF NOT EXISTS student_backups (
-    id SERIAL PRIMARY KEY,
-    student_id TEXT NOT NULL,
-    student_name TEXT NOT NULL,
-    course_id TEXT NOT NULL,
-    backup_date TIMESTAMP NOT NULL,
-    backup_size BIGINT NOT NULL,
-    data JSONB NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-  );
-  */
 
   Future<Map<String, dynamic>> createBackup({
     required String studentId,
@@ -44,21 +29,53 @@ class SupabaseService {
       final backupSize = _calculateBackupSize(backupData);
       final backupDate = DateTime.now();
 
-      final response = await client.from(tableName).insert({
-        'student_id': studentId,
-        'student_name': studentName,
-        'course_id': courseId,
-        'backup_date': backupDate.toIso8601String(),
-        'backup_size': backupSize,
-        'data': backupData,
-      }).select();
+      // Check if backup already exists for this student
+      final existingBackup = await client
+          .from(tableName)
+          .select()
+          .eq('student_id', studentId)
+          .maybeSingle();
 
-      return {
-        'success': true,
-        'data': response.isNotEmpty ? response[0] : null,
-        'backupDate': backupDate,
-        'backupSize': backupSize,
-      };
+      if (existingBackup != null) {
+        // Update existing backup
+        final response = await client
+            .from(tableName)
+            .update({
+              'student_name': studentName,
+              'course_id': courseId,
+              'backup_date': backupDate.toIso8601String(),
+              'backup_size': backupSize,
+              'data': backupData,
+            })
+            .eq('student_id', studentId)
+            .select();
+
+        return {
+          'success': true,
+          'data': response.isNotEmpty ? response[0] : null,
+          'backupDate': backupDate,
+          'backupSize': backupSize,
+          'isUpdate': true,
+        };
+      } else {
+        // Create new backup
+        final response = await client.from(tableName).insert({
+          'student_id': studentId,
+          'student_name': studentName,
+          'course_id': courseId,
+          'backup_date': backupDate.toIso8601String(),
+          'backup_size': backupSize,
+          'data': backupData,
+        }).select();
+
+        return {
+          'success': true,
+          'data': response.isNotEmpty ? response[0] : null,
+          'backupDate': backupDate,
+          'backupSize': backupSize,
+          'isUpdate': false,
+        };
+      }
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }
@@ -83,11 +100,10 @@ class SupabaseService {
           .from(tableName)
           .select()
           .eq('student_id', studentId)
-          .order('backup_date', ascending: false)
-          .limit(1);
+          .maybeSingle();
 
-      if (response.isNotEmpty) {
-        return response[0];
+      if (response != null) {
+        return response;
       }
       return {};
     } catch (e) {
@@ -105,6 +121,20 @@ class SupabaseService {
 
       if (response != null) {
         final backupData = response['data'] as Map<String, dynamic>;
+        await _restoreToLocalDatabase(localDb, backupData);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> restoreLatestBackup(String studentId, Database localDb) async {
+    try {
+      final latestBackup = await getLatestBackup(studentId);
+      if (latestBackup.isNotEmpty) {
+        final backupData = latestBackup['data'] as Map<String, dynamic>;
         await _restoreToLocalDatabase(localDb, backupData);
         return true;
       }

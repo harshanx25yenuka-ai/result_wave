@@ -3,6 +3,8 @@ import 'package:result_wave/models/student.dart';
 import 'package:result_wave/screens/home_screen.dart';
 import 'package:result_wave/screens/create_account_screen.dart';
 import 'package:result_wave/services/database_service.dart';
+import 'package:result_wave/services/auth_service.dart';
+import 'package:result_wave/services/supabase_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -19,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = true;
   bool _isLoggingIn = false;
   late AnimationController _controller;
+  final AuthService _authService = AuthService();
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -45,9 +49,35 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Future<void> _checkAndRestoreBackup(String studentId) async {
+    try {
+      final latestBackup = await _supabaseService.getLatestBackup(studentId);
+
+      if (latestBackup.isNotEmpty) {
+        final db = await DatabaseService().database;
+        final restored = await _supabaseService.restoreBackup(
+          latestBackup['id'],
+          db,
+        );
+
+        if (restored) {
+          _showMessage('Latest backup restored successfully!', isError: false);
+          await _loadStudents();
+        }
+      }
+    } catch (e) {
+      // Continue even if backup restore fails
+      print('Backup restore error: $e');
+    }
+  }
+
   void _login() async {
     if (_selectedStudentId != null) {
       setState(() => _isLoggingIn = true);
+
+      await _checkAndRestoreBackup(_selectedStudentId!);
+
+      await _authService.setLoggedIn(_selectedStudentId!);
 
       await Future.delayed(const Duration(milliseconds: 800));
 
@@ -60,6 +90,16 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       );
     }
+  }
+
+  void _showMessage(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:result_wave/pages/dashboard_page.dart';
 import 'package:result_wave/pages/results_page.dart';
 import 'package:result_wave/pages/settings_page.dart';
+import 'package:result_wave/services/auth_service.dart';
+import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 
@@ -19,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen>
   int _selectedIndex = 0;
   late List<Widget> _pages;
   late AnimationController _animationController;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -40,6 +43,43 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _authService.logout();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
+      }
+    }
+  }
+
   void _onTabTapped(int index) {
     if (_selectedIndex != index) {
       setState(() {
@@ -54,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       body: Stack(
         children: [
-          // Main content with smooth transition
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             switchInCurve: Curves.easeOutCubic,
@@ -122,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen>
     required String label,
   }) {
     final isSelected = _selectedIndex == index;
-    final theme = Theme.of(context);
 
     return GestureDetector(
       onTap: () => _onTabTapped(index),
