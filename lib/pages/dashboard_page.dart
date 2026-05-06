@@ -51,8 +51,8 @@ class _DashboardPageState extends State<DashboardPage>
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      vsync: this,
       duration: const Duration(milliseconds: 800),
+      vsync: this,
     );
     _loadData();
   }
@@ -280,9 +280,11 @@ class _DashboardPageState extends State<DashboardPage>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       decoration: BoxDecoration(
-        gradient: Theme.of(context).brightness == Brightness.dark
+        gradient: isDark
             ? AppGradients.darkBackgroundGradient
             : AppGradients.backgroundGradient,
       ),
@@ -370,7 +372,9 @@ class _DashboardPageState extends State<DashboardPage>
                                           'Here\'s your academic progress summary',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: Colors.grey.shade600,
+                                            color: isDark
+                                                ? Colors.grey.shade400
+                                                : Colors.grey.shade600,
                                           ),
                                         ),
                                       ],
@@ -492,18 +496,21 @@ class _DashboardPageState extends State<DashboardPage>
                                         'Current CGPA',
                                         _courseGPA.toStringAsFixed(2),
                                         _getGpaColor(_courseGPA),
+                                        isDark,
                                       ),
                                       const SizedBox(height: 8),
                                       _buildGpaInfoRow(
                                         'Target',
                                         '2.00',
                                         AppColors.warning,
+                                        isDark,
                                       ),
                                       const SizedBox(height: 8),
                                       _buildGpaInfoRow(
                                         'Status',
                                         _getGpaLabel(_courseGPA),
                                         _getGpaColor(_courseGPA),
+                                        isDark,
                                       ),
                                     ],
                                   ),
@@ -512,7 +519,9 @@ class _DashboardPageState extends State<DashboardPage>
                               const SizedBox(height: 20),
                               LinearProgressIndicator(
                                 value: _courseGPA / 4.0,
-                                backgroundColor: Colors.grey.shade200,
+                                backgroundColor: isDark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200,
                                 color: _getGpaColor(_courseGPA),
                                 minHeight: 8,
                                 borderRadius: BorderRadius.circular(4),
@@ -641,6 +650,7 @@ class _DashboardPageState extends State<DashboardPage>
                                             (module) => _buildModuleAlert(
                                               module,
                                               AppColors.error,
+                                              isDark,
                                             ),
                                           )
                                           .toList(),
@@ -718,6 +728,7 @@ class _DashboardPageState extends State<DashboardPage>
                                             (module) => _buildModuleAlert(
                                               module,
                                               AppColors.warning,
+                                              isDark,
                                             ),
                                           )
                                           .toList(),
@@ -765,7 +776,8 @@ class _DashboardPageState extends State<DashboardPage>
                                 ),
                                 const SizedBox(height: 16),
                                 ...(_semesterGPAs.keys.toList()..sort()).map(
-                                  (semester) => _buildSemesterCard(semester),
+                                  (semester) =>
+                                      _buildSemesterCard(semester, isDark),
                                 ),
                               ],
                             ),
@@ -827,7 +839,12 @@ class _DashboardPageState extends State<DashboardPage>
                                         Expanded(
                                           child: Text(
                                             suggestion,
-                                            style: TextStyle(fontSize: 13),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: isDark
+                                                  ? Colors.grey.shade300
+                                                  : null,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -847,7 +864,12 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _buildGpaInfoRow(String label, String value, Color color) {
+  Widget _buildGpaInfoRow(
+    String label,
+    String value,
+    Color color,
+    bool isDark,
+  ) {
     return Row(
       children: [
         Container(
@@ -858,7 +880,10 @@ class _DashboardPageState extends State<DashboardPage>
         const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          ),
         ),
         const SizedBox(width: 12),
         Text(
@@ -873,12 +898,16 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _buildModuleAlert(Map<String, dynamic> module, Color color) {
+  Widget _buildModuleAlert(
+    Map<String, dynamic> module,
+    Color color,
+    bool isDark,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withOpacity(isDark ? 0.15 : 0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.2)),
       ),
@@ -901,7 +930,10 @@ class _DashboardPageState extends State<DashboardPage>
                   children: [
                     Text(
                       module['moduleId'],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : null,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Container(
@@ -929,7 +961,10 @@ class _DashboardPageState extends State<DashboardPage>
                 ),
                 Text(
                   module['moduleName'],
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
                 ),
               ],
             ),
@@ -958,7 +993,10 @@ class _DashboardPageState extends State<DashboardPage>
               const SizedBox(height: 4),
               Text(
                 'Semester ${module['semester']}',
-                style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
+                ),
               ),
             ],
           ),
@@ -967,7 +1005,7 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _buildSemesterCard(int semester) {
+  Widget _buildSemesterCard(int semester, bool isDark) {
     double gpa = _semesterGPAs[semester]!;
     int gpaCredits = _semesterGpaCredits[semester] ?? 0;
     int passedNonGpa = _semesterPassedNonGpaModules[semester] ?? 0;
@@ -981,10 +1019,23 @@ class _DashboardPageState extends State<DashboardPage>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Colors.white, Colors.grey.shade50],
+          colors: isDark
+              ? [AppColors.surfaceDark, AppColors.backgroundDark]
+              : [Colors.white, Colors.grey.shade50],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: gpaColor.withOpacity(0.3)),
+        border: Border.all(
+          color: isDark ? gpaColor.withOpacity(0.3) : gpaColor.withOpacity(0.3),
+        ),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1015,15 +1066,19 @@ class _DashboardPageState extends State<DashboardPage>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Semester',
-                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark ? Colors.grey.shade500 : Colors.grey,
+                        ),
                       ),
                       Text(
                         '$semester',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : null,
                         ),
                       ),
                     ],
@@ -1054,7 +1109,9 @@ class _DashboardPageState extends State<DashboardPage>
           const SizedBox(height: 12),
           LinearProgressIndicator(
             value: gpa / 4.0,
-            backgroundColor: Colors.grey.shade200,
+            backgroundColor: isDark
+                ? Colors.grey.shade800
+                : Colors.grey.shade200,
             color: gpaColor,
             minHeight: 6,
             borderRadius: BorderRadius.circular(3),
@@ -1062,11 +1119,18 @@ class _DashboardPageState extends State<DashboardPage>
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(Icons.credit_card, size: 12, color: Colors.grey.shade500),
+              Icon(
+                Icons.credit_card,
+                size: 12,
+                color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
+              ),
               const SizedBox(width: 4),
               Text(
                 '$gpaCredits credits',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
               ),
               const Spacer(),
               if (totalNonGpa > 0)
