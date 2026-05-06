@@ -536,7 +536,6 @@ class _InsightsScreenState extends State<InsightsPage>
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        // Removed CGPA display from app bar
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -550,15 +549,10 @@ class _InsightsScreenState extends State<InsightsPage>
             ? _buildEmptyState(isDark, screenHeight)
             : Column(
                 children: [
-                  // Summary Header - Responsive height
-                  SizedBox(
-                    height: screenHeight * 0.25,
-                    child: _buildSummaryHeader(isDark, screenWidth),
-                  ),
                   // Page Indicator
                   if (availableCategories.length > 1)
                     Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      margin: const EdgeInsets.only(top: 16, bottom: 8),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(availableCategories.length, (
@@ -596,6 +590,7 @@ class _InsightsScreenState extends State<InsightsPage>
                           items,
                           isDark,
                           screenHeight,
+                          screenWidth,
                         );
                       }).toList(),
                     ),
@@ -606,144 +601,12 @@ class _InsightsScreenState extends State<InsightsPage>
     );
   }
 
-  Widget _buildSummaryHeader(bool isDark, double screenWidth) {
-    int criticalCount = _categorizedSuggestions['critical']?.length ?? 0;
-    int warningCount = _categorizedSuggestions['warning']?.length ?? 0;
-    int infoCount = _categorizedSuggestions['info']?.length ?? 0;
-    int successCount = _categorizedSuggestions['success']?.length ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      child: GlassCard(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: AppGradients.goldGradient,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'AI Analysis Summary',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Based on your academic performance',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildSummaryChip(
-                  'Critical',
-                  criticalCount,
-                  AppColors.error,
-                  isDark,
-                  screenWidth,
-                ),
-                _buildSummaryChip(
-                  'Warning',
-                  warningCount,
-                  AppColors.warning,
-                  isDark,
-                  screenWidth,
-                ),
-                _buildSummaryChip(
-                  'Info',
-                  infoCount,
-                  AppColors.info,
-                  isDark,
-                  screenWidth,
-                ),
-                _buildSummaryChip(
-                  'Success',
-                  successCount,
-                  AppColors.success,
-                  isDark,
-                  screenWidth,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryChip(
-    String label,
-    int count,
-    Color color,
-    bool isDark,
-    double screenWidth,
-  ) {
-    double chipWidth = (screenWidth - 64) / 4; // Responsive width calculation
-
-    return Container(
-      width: chipWidth,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            count.toString(),
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCategoryPage(
     String category,
     List<Map<String, dynamic>> items,
     bool isDark,
     double screenHeight,
+    double screenWidth,
   ) {
     Color categoryColor = _getCategoryColor(category);
     IconData categoryIcon = _getCategoryIcon(category);
@@ -834,7 +697,7 @@ class _InsightsScreenState extends State<InsightsPage>
                     item,
                     categoryColor,
                     isDark,
-                    screenHeight,
+                    screenWidth,
                   ),
                 ),
               )
@@ -848,7 +711,7 @@ class _InsightsScreenState extends State<InsightsPage>
     Map<String, dynamic> insight,
     Color categoryColor,
     bool isDark,
-    double screenHeight,
+    double screenWidth,
   ) {
     return GlassCard(
       padding: const EdgeInsets.all(16),
