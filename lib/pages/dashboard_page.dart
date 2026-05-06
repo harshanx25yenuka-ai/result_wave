@@ -4,6 +4,7 @@ import 'package:result_wave/models/result.dart';
 import 'package:result_wave/models/grade.dart';
 import 'package:result_wave/models/student.dart';
 import 'package:result_wave/models/course.dart';
+import 'package:result_wave/pages/insights_page.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
@@ -33,7 +34,7 @@ class _DashboardPageState extends State<DashboardPage>
   Map<int, int> _semesterPassedNonGpaModules = {};
   Map<int, int> _semesterTotalNonGpaModules = {};
   double _courseGPA = 0.0;
-  List<String> _suggestions = [];
+  int _insightsCount = 0;
   bool _isDegreeEligible = false;
   String _degreeStatus = '';
   bool _isLoading = true;
@@ -179,18 +180,43 @@ class _DashboardPageState extends State<DashboardPage>
       }
     }
 
-    List<String> suggestions = [];
-    for (var semester in semesterGPAs.keys) {
-      if (semesterGPAs[semester]! < 2.0) {
-        suggestions.add('Improve Semester $semester GPA to 2.0+');
+    // Calculate insights count
+    int insightsCount = 0;
+
+    // Failed modules
+    for (var result in results) {
+      if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
+        insightsCount++;
+      }
+      if (['I', 'I(ET)', 'I(CA)'].contains(result.grade)) {
+        insightsCount++;
       }
     }
-    if (courseGPA < 2.0) {
-      suggestions.add(
-        'Overall GPA ${courseGPA.toStringAsFixed(2)} needs to reach 2.0',
-      );
+
+    // GPA issues
+    if (courseGPA < 2.0)
+      insightsCount++;
+    else if (courseGPA < 2.5)
+      insightsCount++;
+
+    // Semester issues
+    for (var semester in semesterGPAs.keys) {
+      if (semesterGPAs[semester]! < 2.0) insightsCount++;
     }
 
+    // Non-GPA issues
+    for (var semester in semesterNonGpaModules.keys) {
+      int passed = semesterPassedNonGpa[semester] ?? 0;
+      int total = semesterTotalNonGpa[semester] ?? 0;
+      if (passed < total) insightsCount++;
+    }
+
+    // Degree eligibility
+    if (!isEligible) insightsCount++;
+
+    if (insightsCount == 0) insightsCount = 1; // Show positive insight
+
+    // Failed modules list
     List<Map<String, dynamic>> failedModules = [];
     List<Map<String, dynamic>> incompleteModules = [];
 
@@ -207,18 +233,15 @@ class _DashboardPageState extends State<DashboardPage>
         ),
       );
 
-      String moduleType = module.isGpaModule ? 'GPA' : 'Non-GPA';
-
       if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
         failedModules.add({
           'moduleId': module.moduleId,
           'moduleName': module.moduleName,
           'semester': module.semester,
           'grade': result.grade,
-          'type': moduleType,
+          'type': module.isGpaModule ? 'GPA' : 'Non-GPA',
           'credits': module.credits,
         });
-        suggestions.add('Retake ${module.moduleId} - Failed');
       }
 
       if (['I', 'I(ET)', 'I(CA)'].contains(result.grade)) {
@@ -227,10 +250,9 @@ class _DashboardPageState extends State<DashboardPage>
           'moduleName': module.moduleName,
           'semester': module.semester,
           'grade': result.grade,
-          'type': moduleType,
+          'type': module.isGpaModule ? 'GPA' : 'Non-GPA',
           'credits': module.credits,
         });
-        suggestions.add('Complete ${module.moduleId} - Incomplete');
       }
     }
 
@@ -248,7 +270,7 @@ class _DashboardPageState extends State<DashboardPage>
       _semesterPassedNonGpaModules = semesterPassedNonGpa;
       _semesterTotalNonGpaModules = semesterTotalNonGpa;
       _courseGPA = courseGPA;
-      _suggestions = suggestions;
+      _insightsCount = insightsCount;
       _isDegreeEligible = isEligible;
       _degreeStatus = degreeStatus;
       _failedModules = failedModules;
@@ -278,6 +300,15 @@ class _DashboardPageState extends State<DashboardPage>
     return 'Needs Improvement';
   }
 
+  void _openInsights() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => InsightsPage(studentId: widget.studentId),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -291,6 +322,40 @@ class _DashboardPageState extends State<DashboardPage>
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: IconButton(
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.auto_awesome),
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppColors.gold,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 18,
+                      minHeight: 18,
+                    ),
+                    child: Text(
+                      '$_insightsCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            onPressed: _openInsights,
+            tooltip: 'AI Insights',
+          ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -778,78 +843,6 @@ class _DashboardPageState extends State<DashboardPage>
                                 ...(_semesterGPAs.keys.toList()..sort()).map(
                                   (semester) =>
                                       _buildSemesterCard(semester, isDark),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-
-                      // Suggestions
-                      if (_suggestions.isNotEmpty) ...[
-                        FadeInAnimation(
-                          delay: 550,
-                          child: GlassCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        gradient: AppGradients.goldGradient,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.lightbulb,
-                                        color: Colors.white,
-                                        size: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    const Text(
-                                      'AI Suggestions',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                ..._suggestions.map(
-                                  (suggestion) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          margin: const EdgeInsets.only(top: 4),
-                                          width: 6,
-                                          height: 6,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.gold,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            suggestion,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: isDark
-                                                  ? Colors.grey.shade300
-                                                  : null,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
                                 ),
                               ],
                             ),
