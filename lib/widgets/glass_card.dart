@@ -6,6 +6,7 @@ class GlassCard extends StatelessWidget {
   final VoidCallback? onTap;
   final double elevation;
   final EdgeInsets? padding;
+  final EdgeInsets? margin;
   final BorderRadius? borderRadius;
 
   const GlassCard({
@@ -14,6 +15,7 @@ class GlassCard extends StatelessWidget {
     this.onTap,
     this.elevation = 4,
     this.padding,
+    this.margin,
     this.borderRadius,
   }) : super(key: key);
 
@@ -22,6 +24,7 @@ class GlassCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
+      margin: margin,
       decoration: BoxDecoration(
         borderRadius:
             borderRadius ?? BorderRadius.circular(AppConstants.borderRadiusLg),
@@ -70,13 +73,22 @@ class GradientCard extends StatelessWidget {
   final Widget child;
   final LinearGradient? gradient;
   final VoidCallback? onTap;
+  final EdgeInsets? padding;
+  final EdgeInsets? margin;
 
-  const GradientCard({Key? key, required this.child, this.gradient, this.onTap})
-    : super(key: key);
+  const GradientCard({
+    Key? key,
+    required this.child,
+    this.gradient,
+    this.onTap,
+    this.padding,
+    this.margin,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      margin: margin,
       decoration: BoxDecoration(
         gradient: gradient ?? AppGradients.primary,
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLg),
@@ -87,7 +99,10 @@ class GradientCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppConstants.borderRadiusLg),
-          child: Padding(padding: const EdgeInsets.all(20), child: child),
+          child: Padding(
+            padding: padding ?? const EdgeInsets.all(20),
+            child: child,
+          ),
         ),
       ),
     );
