@@ -279,7 +279,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Login button only (no back button)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -738,9 +737,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           ),
         ),
         const SizedBox(height: 16),
-        // Horizontal scroll for avatars
+        // Horizontal scroll for avatars - 100% circular
         SizedBox(
-          height: 80,
+          height: 90,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _avatars.length,
@@ -754,51 +753,78 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   });
                 },
                 child: Container(
-                  width: 70,
-                  height: 70,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.primaryBlue
-                          : Colors.transparent,
-                      width: 3,
-                    ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primaryBlue.withOpacity(0.3),
-                              blurRadius: 8,
-                              spreadRadius: 2,
+                  width: 80,
+                  height: 80,
+                  margin: const EdgeInsets.only(right: 16),
+                  child: Stack(
+                    children: [
+                      // Circular avatar with ClipOval
+                      ClipOval(
+                        child: Image.asset(
+                          avatar.avatarPath,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 80,
+                              height: 80,
+                              color: Colors.grey.shade300,
+                              child: const Icon(
+                                Icons.person,
+                                size: 40,
+                                color: Colors.white,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      // Selection border
+                      if (isSelected)
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.primaryBlue,
+                              width: 4,
                             ),
-                          ]
-                        : null,
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      avatar.avatarPath,
-                      width: 70,
-                      height: 70,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey.shade300,
-                          child: const Icon(
-                            Icons.person,
-                            size: 35,
-                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryBlue.withOpacity(0.5),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      // Selection checkmark
+                      if (isSelected)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.primaryBlue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               );
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
