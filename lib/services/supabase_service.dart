@@ -139,19 +139,30 @@ class SupabaseService {
 
   Future<Map<String, dynamic>> getUserAvatar(String studentId) async {
     try {
+      // Set RLS context first
+      await setRLSContext(studentId);
+
+      // Query the user table directly
       final response = await client
           .from(SupabaseConfig.usersTable)
           .select('avatar_id')
           .eq('student_id', studentId)
           .maybeSingle();
 
+      print('Get user avatar response: $response');
+
       if (response != null) {
-        return {'success': true, 'avatarId': response['avatar_id']};
+        final avatarId = response['avatar_id'];
+        print('Avatar ID found: $avatarId');
+        return {'success': true, 'avatarId': avatarId};
       }
+      print('No user found for studentId: $studentId');
       return {'success': false, 'avatarId': null};
     } catch (e) {
       print('Get user avatar error: $e');
       return {'success': false, 'avatarId': null, 'error': e.toString()};
+    } finally {
+      await clearRLSContext();
     }
   }
 
@@ -160,14 +171,14 @@ class SupabaseService {
     required int? avatarId,
   }) async {
     try {
-      // First set RLS context
       await setRLSContext(studentId);
 
-      // Update using RPC function to bypass RLS
       final response = await client.rpc(
         'update_user_avatar',
         params: {'p_student_id': studentId, 'p_avatar_id': avatarId},
       );
+
+      print('Update user avatar response: $response');
 
       if (response != null && response['success'] == true) {
         return {

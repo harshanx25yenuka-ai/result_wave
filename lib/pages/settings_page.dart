@@ -109,9 +109,16 @@ class _SettingsPageState extends State<SettingsPage>
         setState(() {
           _selectedAvatarId = result['avatarId'];
         });
+      } else {
+        setState(() {
+          _selectedAvatarId = null;
+        });
       }
     } catch (e) {
       print('Error loading user avatar: $e');
+      setState(() {
+        _selectedAvatarId = null;
+      });
     }
   }
 
