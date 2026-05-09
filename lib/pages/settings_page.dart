@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:result_wave/models/student.dart';
+import 'package:result_wave/models/avatar.dart';
 import 'package:result_wave/providers/theme_provider.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/pdf_service.dart';
@@ -12,6 +13,7 @@ import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsPage extends StatefulWidget {
   final String studentId;
@@ -39,6 +41,12 @@ class _SettingsPageState extends State<SettingsPage>
   final SupabaseService _supabaseService = SupabaseService();
   final AuthService _authService = AuthService();
 
+  // Avatar related
+  List<Avatar> _avatars = [];
+  int? _selectedAvatarId;
+  bool _isUpdatingAvatar = false;
+  String? _courseName;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +71,8 @@ class _SettingsPageState extends State<SettingsPage>
     }
     await _loadData();
     await _loadBackupInfo();
+    await _loadAvatars();
+    await _loadUserAvatar();
   }
 
   Future<void> _loadData() async {
@@ -76,7 +86,211 @@ class _SettingsPageState extends State<SettingsPage>
     );
     _semesters = modules.map((m) => m.semester).toSet().toList()..sort();
 
+    // Get course name
+    final courses = await DatabaseService().getCourses();
+    final course = courses.firstWhere((c) => c.courseId == _student!.courseId);
+    _courseName = course.courseName;
+
     setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadAvatars() async {
+    try {
+      final avatars = await DatabaseService().getAvatars();
+      setState(() {
+        _avatars = avatars;
+      });
+    } catch (e) {
+      print('Error loading avatars: $e');
+    }
+  }
+
+  Future<void> _loadUserAvatar() async {
+    try {
+      final result = await _supabaseService.getUserAvatar(widget.studentId);
+      if (result['success'] && result['avatarId'] != null) {
+        setState(() {
+          _selectedAvatarId = result['avatarId'];
+        });
+      }
+    } catch (e) {
+      print('Error loading user avatar: $e');
+    }
+  }
+
+  Future<void> _updateAvatar(int? avatarId) async {
+    setState(() => _isUpdatingAvatar = true);
+
+    try {
+      final result = await _supabaseService.updateUserAvatar(
+        studentId: widget.studentId,
+        avatarId: avatarId,
+      );
+
+      if (result['success']) {
+        setState(() {
+          _selectedAvatarId = avatarId;
+        });
+        _showMessage('Avatar updated successfully!', isError: false);
+      } else {
+        _showMessage(
+          'Failed to update avatar: ${result['error']}',
+          isError: true,
+        );
+      }
+    } catch (e) {
+      _showMessage('Error updating avatar: $e', isError: true);
+    } finally {
+      setState(() => _isUpdatingAvatar = false);
+    }
+  }
+
+  void _showAvatarPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            height: MediaQuery.of(context).size.height * 0.5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Choose Avatar',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Select a profile picture for your account',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 1,
+                        ),
+                    itemCount: _avatars.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        // Default avatar option (no avatar)
+                        final isSelected = _selectedAvatarId == null;
+                        return GestureDetector(
+                          onTap: () {
+                            _updateAvatar(null);
+                            Navigator.pop(context);
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.primaryBlue
+                                    : Colors.grey.shade300,
+                                width: 3,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.primaryBlue
+                                            .withOpacity(0.3),
+                                        blurRadius: 8,
+                                        spreadRadius: 2,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: ClipOval(
+                              child: Container(
+                                color: Colors.grey.shade200,
+                                child: const Icon(
+                                  Icons.person,
+                                  size: 40,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final avatar = _avatars[index - 1];
+                      final isSelected = _selectedAvatarId == avatar.id;
+                      return GestureDetector(
+                        onTap: () {
+                          _updateAvatar(avatar.id);
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primaryBlue
+                                  : Colors.transparent,
+                              width: 3,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: AppColors.primaryBlue.withOpacity(
+                                        0.3,
+                                      ),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              avatar.avatarPath,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey.shade300,
+                                  child: const Icon(
+                                    Icons.person,
+                                    size: 30,
+                                    color: Colors.white,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _loadBackupInfo() async {
@@ -114,7 +328,6 @@ class _SettingsPageState extends State<SettingsPage>
       );
 
       if (result['success']) {
-        // Reload backup info immediately after successful backup
         await _loadBackupInfo();
 
         final action = result['isUpdate'] == true ? 'updated' : 'created';
@@ -241,7 +454,9 @@ class _SettingsPageState extends State<SettingsPage>
     );
 
     if (confirm == true) {
+      await _supabaseService.logout();
       await _authService.logout();
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -251,7 +466,7 @@ class _SettingsPageState extends State<SettingsPage>
     }
   }
 
-  void _showBackupHistoryDialog() {
+  void _showBackupListDialog() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -414,7 +629,6 @@ class _SettingsPageState extends State<SettingsPage>
                                         ],
                                       ),
                                     ),
-                                    // Delete button only
                                     IconButton(
                                       icon: Icon(
                                         Icons.delete_outline,
@@ -506,16 +720,7 @@ class _SettingsPageState extends State<SettingsPage>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Settings'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: Container(
         decoration: BoxDecoration(
           gradient: isDark
@@ -537,7 +742,44 @@ class _SettingsPageState extends State<SettingsPage>
                     child: GlassCard(
                       child: Column(
                         children: [
-                          _buildProfileAvatar(),
+                          // Avatar with edit button
+                          Stack(
+                            children: [
+                              _buildProfileAvatar(),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: _showAvatarPicker,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      gradient: AppGradients.primary,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: _isUpdatingAvatar
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.edit,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             _student?.studentName ?? '',
@@ -560,7 +802,7 @@ class _SettingsPageState extends State<SettingsPage>
                           _buildInfoRow(
                             Icons.school,
                             'Course',
-                            _student?.courseId ?? '',
+                            _courseName ?? _student?.courseId ?? '',
                             AppColors.primaryBlue,
                             isDark,
                           ),
@@ -584,7 +826,6 @@ class _SettingsPageState extends State<SettingsPage>
                     child: GlassCard(
                       child: Column(
                         children: [
-                          // Latest Backup Info - Shows real-time data
                           if (_latestBackup != null &&
                               _latestBackup!.isNotEmpty)
                             Container(
@@ -706,7 +947,7 @@ class _SettingsPageState extends State<SettingsPage>
                               const SizedBox(width: 12),
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: _showBackupHistoryDialog,
+                                  onPressed: _showBackupListDialog,
                                   icon: const Icon(Icons.list_alt),
                                   label: const Text('View Backups'),
                                   style: OutlinedButton.styleFrom(
@@ -846,11 +1087,83 @@ class _SettingsPageState extends State<SettingsPage>
                             isDark,
                           ),
                           _buildAboutRow(
-                            'Contact',
+                            'Email',
                             'support@resultwave.com',
                             isDark,
                           ),
+                          _buildAboutRow(
+                            'Website',
+                            'www.resultwave.com',
+                            isDark,
+                          ),
+                          const Divider(),
+                          _buildAboutRow(
+                            'Built with',
+                            'Flutter & Supabase',
+                            isDark,
+                          ),
+                          _buildAboutRow('License', 'MIT', isDark),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.info.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.copyright,
+                                  size: 16,
+                                  color: AppColors.info,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '© 2024 ResultWave. All rights reserved.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark
+                                          ? Colors.grey.shade400
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Logout Button at Bottom
+                  FadeInAnimation(
+                    delay: 550,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: OutlinedButton.icon(
+                          onPressed: _logout,
+                          icon: const Icon(Icons.logout),
+                          label: const Text(
+                            'Logout',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                            side: BorderSide(color: AppColors.error),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -886,27 +1199,58 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildProfileAvatar() {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        gradient: AppGradients.primary,
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.gold, width: 3),
-      ),
-      child: Center(
-        child: Text(
-          _student?.studentName.isNotEmpty == true
-              ? _student!.studentName[0].toUpperCase()
-              : 'U',
-          style: const TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+    // Find selected avatar
+    final selectedAvatar = _avatars.firstWhere(
+      (a) => a.id == _selectedAvatarId,
+      orElse: () => Avatar(id: 0, avatarPath: ''),
+    );
+
+    if (_selectedAvatarId != null && selectedAvatar.avatarPath.isNotEmpty) {
+      return Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.gold, width: 3),
+        ),
+        child: ClipOval(
+          child: Image.asset(
+            selectedAvatar.avatarPath,
+            width: 80,
+            height: 80,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: Colors.grey.shade300,
+                child: const Icon(Icons.person, size: 40, color: Colors.white),
+              );
+            },
           ),
         ),
-      ),
-    );
+      );
+    } else {
+      return Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          gradient: AppGradients.primary,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.gold, width: 3),
+        ),
+        child: Center(
+          child: Text(
+            _student?.studentName.isNotEmpty == true
+                ? _student!.studentName[0].toUpperCase()
+                : 'U',
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildInfoRow(
@@ -1021,19 +1365,21 @@ class _SettingsPageState extends State<SettingsPage>
 
   Widget _buildAboutRow(String label, String value, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: TextStyle(
+              fontSize: 13,
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
           ),
           Text(
             value,
             style: TextStyle(
+              fontSize: 13,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white : null,
             ),

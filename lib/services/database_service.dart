@@ -7,6 +7,7 @@ import '../models/course.dart';
 import '../models/module.dart';
 import '../models/grade.dart';
 import '../models/result.dart';
+import '../models/avatar.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -21,7 +22,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'result_wave.db');
     return await openDatabase(
       path,
-      version: 2, // Incremented version for schema change
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE students (
@@ -63,14 +64,11 @@ class DatabaseService {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          // Add gpaType column to modules table
           try {
             await db.execute(
               'ALTER TABLE modules ADD COLUMN gpaType TEXT DEFAULT "gpa"',
             );
-          } catch (e) {
-            // Column might already exist
-          }
+          } catch (e) {}
         }
       },
     );
@@ -100,7 +98,7 @@ class DatabaseService {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
-    // Load modules with gpa_type
+    // Load modules
     String modulesJson = await rootBundle.loadString('db/modules.json');
     List<dynamic> modules = jsonDecode(modulesJson);
     for (var module in modules) {
@@ -112,6 +110,17 @@ class DatabaseService {
         'semester': module['Semester'],
         'gpaType': module['gpa_type'] ?? 'gpa',
       }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  Future<List<Avatar>> getAvatars() async {
+    try {
+      String avatarsJson = await rootBundle.loadString('db/avatars.json');
+      List<dynamic> avatarsList = jsonDecode(avatarsJson);
+      return avatarsList.map((json) => Avatar.fromJson(json)).toList();
+    } catch (e) {
+      print('Error loading avatars: $e');
+      return [];
     }
   }
 

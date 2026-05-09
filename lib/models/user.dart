@@ -4,6 +4,7 @@ class AppUser {
   final String courseId;
   final String password;
   final DateTime createdAt;
+  final int? avatarId;
 
   AppUser({
     required this.studentId,
@@ -11,6 +12,7 @@ class AppUser {
     required this.courseId,
     required this.password,
     required this.createdAt,
+    this.avatarId,
   });
 
   Map<String, dynamic> toMap() {
@@ -20,6 +22,7 @@ class AppUser {
       'course_id': courseId,
       'password': password,
       'created_at': createdAt.toIso8601String(),
+      'avatar_id': avatarId,
     };
   }
 
@@ -32,6 +35,7 @@ class AppUser {
       createdAt: DateTime.parse(
         map['created_at'] ?? DateTime.now().toIso8601String(),
       ),
+      avatarId: map['avatar_id'],
     );
   }
 }

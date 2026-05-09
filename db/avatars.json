@@ -1,14 +1,26 @@
 [
     {
         "id": 1,
-        "avatar": "assets/avatars/avatar_1.png"
+        "avatar": "assets/avatars/avatar_1.jpg"
     },
     {
         "id": 2,
-        "avatar": "assets/avatars/avatar_2.png"
+        "avatar": "assets/avatars/avatar_2.jpg"
     },
     {
         "id": 3,
-        "avatar": "assets/avatars/avatar_3.png"
+        "avatar": "assets/avatars/avatar_3.jpg"
+    },
+    {
+        "id": 4,
+        "avatar": "assets/avatars/avatar_4.jpg"
+    },
+    {
+        "id": 5,
+        "avatar": "assets/avatars/avatar_5.jpg"
+    },
+    {
+        "id": 6,
+        "avatar": "assets/avatars/avatar_6.jpg"
     }
 ]

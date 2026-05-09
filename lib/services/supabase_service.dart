@@ -34,7 +34,6 @@ class SupabaseService {
     return Supabase.instance.client;
   }
 
-  // RLS Helper Methods
   Future<void> setRLSContext(String studentId) async {
     _currentStudentId = studentId;
     await SupabaseConfig.setCurrentStudentId(studentId);
@@ -45,15 +44,12 @@ class SupabaseService {
     await SupabaseConfig.clearCurrentStudentId();
   }
 
-  // =============================================
-  // USER AUTHENTICATION METHODS
-  // =============================================
-
   Future<Map<String, dynamic>> createUser({
     required String studentId,
     required String studentName,
     required String courseId,
     required String password,
+    int? avatarId,
   }) async {
     try {
       final response = await client.rpc(
@@ -63,6 +59,7 @@ class SupabaseService {
           'p_student_name': studentName,
           'p_course_id': courseId,
           'p_password': password,
+          'p_avatar_id': avatarId,
         },
       );
 
@@ -92,7 +89,6 @@ class SupabaseService {
       );
 
       if (response != null && response['success'] == true) {
-        // Set RLS context for this user
         await setRLSContext(studentId);
 
         return {'success': true, 'user': response['user']};
@@ -126,10 +122,51 @@ class SupabaseService {
     }
   }
 
-  // =============================================
-  // BACKUP METHODS
-  // =============================================
+  Future<Map<String, dynamic>> getUserAvatar(String studentId) async {
+    try {
+      final response = await client
+          .from(SupabaseConfig.usersTable)
+          .select('avatar_id')
+          .eq('student_id', studentId)
+          .maybeSingle();
 
+      if (response != null) {
+        return {'success': true, 'avatarId': response['avatar_id']};
+      }
+      return {'success': false, 'avatarId': null};
+    } catch (e) {
+      return {'success': false, 'avatarId': null, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> updateUserAvatar({
+    required String studentId,
+    required int? avatarId,
+  }) async {
+    try {
+      final response = await client
+          .from(SupabaseConfig.usersTable)
+          .update({
+            'avatar_id': avatarId,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('student_id', studentId)
+          .select();
+
+      if (response.isNotEmpty) {
+        return {
+          'success': true,
+          'message': 'Avatar updated successfully',
+          'avatarId': avatarId,
+        };
+      }
+      return {'success': false, 'error': 'Failed to update avatar'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // Backup Methods
   Future<Map<String, dynamic>> createBackup({
     required String studentId,
     required String studentName,
@@ -137,32 +174,62 @@ class SupabaseService {
     required Map<String, dynamic> backupData,
   }) async {
     try {
-      final response = await client.rpc(
-        'upsert_student_backup',
-        params: {
-          'p_student_id': studentId,
-          'p_student_name': studentName,
-          'p_course_id': courseId,
-          'p_data': backupData,
-          'p_backup_version': '1.0',
-        },
-      );
+      final backupSize = _calculateBackupSize(backupData);
 
-      if (response != null && response['success'] == true) {
-        return {
-          'success': true,
-          'message': response['message'],
-          'backupId': response['backup_id'],
-          'isUpdate': response['is_update'],
-          'backupDate': DateTime.now(),
-          'backupSize': _calculateBackupSize(backupData),
-        };
+      final existingBackup = await client
+          .from(SupabaseConfig.backupsTable)
+          .select()
+          .eq('student_id', studentId)
+          .maybeSingle();
+
+      if (existingBackup != null) {
+        final response = await client
+            .from(SupabaseConfig.backupsTable)
+            .update({
+              'student_name': studentName,
+              'course_id': courseId,
+              'backup_date': DateTime.now().toIso8601String(),
+              'backup_size': backupSize,
+              'data': backupData,
+              'backup_version': '1.0',
+            })
+            .eq('student_id', studentId)
+            .select();
+
+        if (response.isNotEmpty) {
+          return {
+            'success': true,
+            'message': 'Backup updated successfully',
+            'backupId': response[0]['id'],
+            'isUpdate': true,
+            'backupDate': DateTime.now(),
+            'backupSize': backupSize,
+          };
+        }
       } else {
-        return {
-          'success': false,
-          'error': response?['message'] ?? 'Failed to create backup',
-        };
+        final response = await client.from(SupabaseConfig.backupsTable).insert({
+          'student_id': studentId,
+          'student_name': studentName,
+          'course_id': courseId,
+          'backup_date': DateTime.now().toIso8601String(),
+          'backup_size': backupSize,
+          'data': backupData,
+          'backup_version': '1.0',
+        }).select();
+
+        if (response.isNotEmpty) {
+          return {
+            'success': true,
+            'message': 'Backup created successfully',
+            'backupId': response[0]['id'],
+            'isUpdate': false,
+            'backupDate': DateTime.now(),
+            'backupSize': backupSize,
+          };
+        }
       }
+
+      return {'success': false, 'error': 'Failed to create backup'};
     } catch (e) {
       print('Create backup error: $e');
       return {'success': false, 'error': e.toString()};
@@ -172,11 +239,12 @@ class SupabaseService {
   Future<List<Map<String, dynamic>>> getBackups({String? studentId}) async {
     try {
       if (studentId != null) {
-        final response = await client.rpc(
-          'get_student_backup_history',
-          params: {'p_student_id': studentId},
-        );
-        return response ?? [];
+        final response = await client
+            .from(SupabaseConfig.backupsTable)
+            .select()
+            .eq('student_id', studentId)
+            .order('backup_date', ascending: false);
+        return response;
       } else {
         final response = await client
             .from(SupabaseConfig.backupsTable)
@@ -192,13 +260,16 @@ class SupabaseService {
 
   Future<Map<String, dynamic>> getLatestBackup(String studentId) async {
     try {
-      final response = await client.rpc(
-        'get_latest_student_backup',
-        params: {'p_student_id': studentId},
-      );
+      final response = await client
+          .from(SupabaseConfig.backupsTable)
+          .select()
+          .eq('student_id', studentId)
+          .order('backup_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
 
-      if (response != null && response.isNotEmpty) {
-        return response[0];
+      if (response != null) {
+        return response;
       }
       return {};
     } catch (e) {
@@ -242,117 +313,16 @@ class SupabaseService {
 
   Future<bool> deleteBackup(int backupId) async {
     try {
-      final response = await client.rpc(
-        'delete_student_backup',
-        params: {'p_backup_id': backupId},
-      );
-
-      if (response != null) {
-        return response['success'] == true;
-      }
-      return false;
+      await client
+          .from(SupabaseConfig.backupsTable)
+          .delete()
+          .eq('id', backupId);
+      return true;
     } catch (e) {
       print('Delete backup error: $e');
       return false;
     }
   }
-
-  Future<int> cleanupOldBackups(String studentId) async {
-    try {
-      final response = await client.rpc(
-        'cleanup_old_backups',
-        params: {'p_student_id': studentId},
-      );
-      return response ?? 0;
-    } catch (e) {
-      print('Cleanup old backups error: $e');
-      return 0;
-    }
-  }
-
-  // =============================================
-  // STATISTICS METHODS (from STEP 10)
-  // =============================================
-
-  Future<Map<String, dynamic>> getBackupStatistics() async {
-    try {
-      final response = await client.rpc('get_backup_statistics');
-      if (response != null && response.isNotEmpty) {
-        return {
-          'totalBackups': response[0]['total_backups'] ?? 0,
-          'totalStudentsWithBackups':
-              response[0]['total_students_with_backups'] ?? 0,
-          'avgBackupSize': response[0]['avg_backup_size'] ?? 0,
-          'totalStorageUsed': response[0]['total_storage_used'] ?? 0,
-          'largestBackupSize': response[0]['largest_backup_size'] ?? 0,
-          'smallestBackupSize': response[0]['smallest_backup_size'] ?? 0,
-        };
-      }
-      return {};
-    } catch (e) {
-      print('Get backup statistics error: $e');
-      return {};
-    }
-  }
-
-  Future<Map<String, dynamic>> getUserStatistics() async {
-    try {
-      final response = await client.rpc('get_user_statistics');
-      if (response != null && response.isNotEmpty) {
-        return {
-          'totalUsers': response[0]['total_users'] ?? 0,
-          'activeUsers': response[0]['active_users'] ?? 0,
-          'inactiveUsers': response[0]['inactive_users'] ?? 0,
-          'usersLast7Days': response[0]['users_last_7_days'] ?? 0,
-          'usersLast30Days': response[0]['users_last_30_days'] ?? 0,
-        };
-      }
-      return {};
-    } catch (e) {
-      print('Get user statistics error: $e');
-      return {};
-    }
-  }
-
-  Future<Map<String, dynamic>> getStudentBackupSummary(String studentId) async {
-    try {
-      final response = await client.rpc(
-        'get_student_backup_summary',
-        params: {'p_student_id': studentId},
-      );
-
-      if (response != null && response.isNotEmpty) {
-        return {
-          'totalBackups': response[0]['total_backups'] ?? 0,
-          'latestBackupDate': response[0]['latest_backup_date'] != null
-              ? DateTime.parse(response[0]['latest_backup_date'])
-              : null,
-          'totalStorageUsed': response[0]['total_storage_used'] ?? 0,
-          'oldestBackupDate': response[0]['oldest_backup_date'] != null
-              ? DateTime.parse(response[0]['oldest_backup_date'])
-              : null,
-        };
-      }
-      return {
-        'totalBackups': 0,
-        'latestBackupDate': null,
-        'totalStorageUsed': 0,
-        'oldestBackupDate': null,
-      };
-    } catch (e) {
-      print('Get student backup summary error: $e');
-      return {
-        'totalBackups': 0,
-        'latestBackupDate': null,
-        'totalStorageUsed': 0,
-        'oldestBackupDate': null,
-      };
-    }
-  }
-
-  // =============================================
-  // HELPER METHODS
-  // =============================================
 
   int _calculateBackupSize(Map<String, dynamic> data) {
     final jsonString = data.toString();

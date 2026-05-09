@@ -3,6 +3,7 @@ import 'package:result_wave/models/student.dart';
 import 'package:result_wave/models/course.dart';
 import 'package:result_wave/models/module.dart';
 import 'package:result_wave/models/result.dart';
+import 'package:result_wave/models/avatar.dart';
 import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/supabase_service.dart';
@@ -26,6 +27,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
 
   String? _selectedCourseId;
   List<Course> _courses = [];
+  List<Avatar> _avatars = [];
+  int? _selectedAvatarId;
   bool _isLoading = true;
   bool _isCreating = false;
   late AnimationController _controller;
@@ -53,7 +56,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       duration: const Duration(milliseconds: 800),
       vsync: this,
     )..forward();
-    _loadCourses();
+    _loadData();
 
     _studentIdController.addListener(_validateAndDetectCourse);
     _passwordController.addListener(_validatePassword);
@@ -116,17 +119,19 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     setState(() {});
   }
 
-  Future<void> _loadCourses() async {
+  Future<void> _loadData() async {
     try {
       await DatabaseService().loadJsonData();
       final courses = await DatabaseService().getCourses();
+      final avatars = await DatabaseService().getAvatars();
       setState(() {
         _courses = courses;
+        _avatars = avatars;
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      _showMessage('Error loading courses: $e', isError: true);
+      _showMessage('Error loading data: $e', isError: true);
     }
   }
 
@@ -191,6 +196,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           studentName: studentName,
           courseId: _selectedCourseId!,
           password: password,
+          avatarId: _selectedAvatarId,
         );
 
         if (!result['success']) {
@@ -273,17 +279,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Back button and Login button in same row
+                      // Login button only (no back button)
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(
-                              Icons.arrow_back,
-                              color: Colors.white,
-                            ),
-                          ),
                           TextButton(
                             onPressed: _navigateToLogin,
                             child: Container(
@@ -379,9 +378,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                 const SizedBox(height: 24),
                                 if (_currentStep == 0)
                                   _buildStudentInfoStep(isDark),
-                                if (_currentStep == 1)
+                                if (_currentStep == 1) _buildAvatarStep(isDark),
+                                if (_currentStep == 2)
                                   _buildPasswordStep(isDark),
-                                if (_currentStep == 2) _buildCourseInfo(isDark),
+                                if (_currentStep == 3) _buildCourseInfo(isDark),
                                 const SizedBox(height: 24),
                                 Row(
                                   children: [
@@ -410,7 +410,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                         onPressed: _isCreating
                                             ? null
                                             : () {
-                                                if (_currentStep == 2) {
+                                                if (_currentStep == 3) {
                                                   _createAccount();
                                                 } else {
                                                   if (_currentStep == 0) {
@@ -443,7 +443,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                       );
                                                     }
                                                   } else if (_currentStep ==
-                                                      1) {
+                                                      2) {
                                                     if (!_isPasswordValid) {
                                                       _showMessage(
                                                         'Please meet all password requirements',
@@ -462,6 +462,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                         () => _currentStep++,
                                                       );
                                                     }
+                                                  } else {
+                                                    setState(
+                                                      () => _currentStep++,
+                                                    );
                                                   }
                                                 }
                                               },
@@ -490,7 +494,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                 ),
                                               )
                                             : Text(
-                                                _currentStep == 2
+                                                _currentStep == 3
                                                     ? 'Create Account'
                                                     : 'Next',
                                                 style: const TextStyle(
@@ -503,7 +507,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                   ],
                                 ),
                                 const SizedBox(height: 16),
-                                // Login option at the bottom
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
@@ -564,7 +567,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 : Colors.grey.shade300,
           ),
         ),
-        _buildStepCircle(1, 'Password'),
+        _buildStepCircle(1, 'Avatar'),
         Expanded(
           child: Container(
             height: 2,
@@ -573,7 +576,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 : Colors.grey.shade300,
           ),
         ),
-        _buildStepCircle(2, 'Verify'),
+        _buildStepCircle(2, 'Password'),
+        Expanded(
+          child: Container(
+            height: 2,
+            color: _currentStep >= 3
+                ? AppColors.primaryBlue
+                : Colors.grey.shade300,
+          ),
+        ),
+        _buildStepCircle(3, 'Verify'),
       ],
     );
   }
@@ -704,6 +716,110 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           validator: (value) => value == null || value.trim().isEmpty
               ? 'Enter Student Name'
               : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAvatarStep(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose Profile Avatar',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Select an avatar for your profile (optional)',
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Horizontal scroll for avatars
+        SizedBox(
+          height: 80,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _avatars.length,
+            itemBuilder: (context, index) {
+              final avatar = _avatars[index];
+              final isSelected = _selectedAvatarId == avatar.id;
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedAvatarId = avatar.id;
+                  });
+                },
+                child: Container(
+                  width: 70,
+                  height: 70,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primaryBlue
+                          : Colors.transparent,
+                      width: 3,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primaryBlue.withOpacity(0.3),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      avatar.avatarPath,
+                      width: 70,
+                      height: 70,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey.shade300,
+                          child: const Icon(
+                            Icons.person,
+                            size: 35,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.info.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 16, color: AppColors.info),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'You can change your avatar later in Settings.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
