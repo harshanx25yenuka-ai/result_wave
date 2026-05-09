@@ -36,7 +36,7 @@ class _SettingsPageState extends State<SettingsPage>
   bool _isRestoring = false;
   Map<String, dynamic>? _latestBackup;
   List<Map<String, dynamic>> _backupHistory = [];
-  bool _isLoadingBackups = false;
+  bool _isLoadingBackups = true;
   final SupabaseService _supabaseService = SupabaseService();
   final AuthService _authService = AuthService();
 
@@ -67,15 +67,22 @@ class _SettingsPageState extends State<SettingsPage>
     } catch (e) {
       // Supabase might not be initialized yet
     }
-    await _loadData();
-    await _loadBackupInfo();
-    await _loadAvatars();
-    await _loadUserAvatar();
+
+    // Load all data in parallel for faster loading
+    await Future.wait([
+      _loadData(),
+      _loadAvatars(),
+      _loadUserAvatar(),
+      _loadBackupInfo(),
+    ]);
+
+    setState(() {
+      _isLoading = false;
+      _isLoadingBackups = false;
+    });
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-
     final students = await DatabaseService().getStudents();
     _student = students.firstWhere((s) => s.studentId == widget.studentId);
 
@@ -87,16 +94,12 @@ class _SettingsPageState extends State<SettingsPage>
     final courses = await DatabaseService().getCourses();
     final course = courses.firstWhere((c) => c.courseId == _student!.courseId);
     _courseName = course.courseName;
-
-    setState(() => _isLoading = false);
   }
 
   Future<void> _loadAvatars() async {
     try {
       final avatars = await DatabaseService().getAvatars();
-      setState(() {
-        _avatars = avatars;
-      });
+      _avatars = avatars;
     } catch (e) {
       print('Error loading avatars: $e');
     }
@@ -106,19 +109,21 @@ class _SettingsPageState extends State<SettingsPage>
     try {
       final result = await _supabaseService.getUserAvatar(widget.studentId);
       if (result['success'] && result['avatarId'] != null) {
-        setState(() {
-          _selectedAvatarId = result['avatarId'];
-        });
-      } else {
-        setState(() {
-          _selectedAvatarId = null;
-        });
+        _selectedAvatarId = result['avatarId'];
       }
     } catch (e) {
       print('Error loading user avatar: $e');
-      setState(() {
-        _selectedAvatarId = null;
-      });
+    }
+  }
+
+  Future<void> _loadBackupInfo() async {
+    try {
+      _latestBackup = await _supabaseService.getLatestBackup(widget.studentId);
+      _backupHistory = await _supabaseService.getBackups(
+        studentId: widget.studentId,
+      );
+    } catch (e) {
+      print('Load backup info error: $e');
     }
   }
 
@@ -136,7 +141,6 @@ class _SettingsPageState extends State<SettingsPage>
           _selectedAvatarId = avatarId;
         });
         _showMessage('Avatar updated successfully!', isError: false);
-        await _loadUserAvatar();
       } else {
         _showMessage(
           'Failed to update avatar: ${result['error']}',
@@ -295,25 +299,6 @@ class _SettingsPageState extends State<SettingsPage>
         },
       ),
     );
-  }
-
-  Future<void> _loadBackupInfo() async {
-    setState(() {
-      _isLoadingBackups = true;
-    });
-
-    try {
-      _latestBackup = await _supabaseService.getLatestBackup(widget.studentId);
-      _backupHistory = await _supabaseService.getBackups(
-        studentId: widget.studentId,
-      );
-    } catch (e) {
-      print('Load backup info error: $e');
-    }
-
-    setState(() {
-      _isLoadingBackups = false;
-    });
   }
 
   Future<void> _createBackup() async {
@@ -732,179 +717,413 @@ class _SettingsPageState extends State<SettingsPage>
               : AppGradients.backgroundGradient,
         ),
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // Profile Section
-                  FadeInAnimation(
-                    child: _buildSectionHeader('Profile', Icons.person_outline),
-                  ),
-                  const SizedBox(height: 8),
-                  FadeInAnimation(
-                    delay: 100,
-                    child: GlassCard(
-                      child: Column(
-                        children: [
-                          Stack(
-                            children: [
-                              _buildProfileAvatar(),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: _showAvatarPicker,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      gradient: AppGradients.primary,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2,
+            ? _buildSkeletonLoader(isDark)
+            : RefreshIndicator(
+                onRefresh: () async {
+                  await Future.wait([
+                    _loadData(),
+                    _loadAvatars(),
+                    _loadUserAvatar(),
+                    _loadBackupInfo(),
+                  ]);
+                  setState(() {});
+                },
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    // Profile Section
+                    FadeInAnimation(
+                      child: _buildSectionHeader(
+                        'Profile',
+                        Icons.person_outline,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FadeInAnimation(
+                      delay: 100,
+                      child: GlassCard(
+                        child: Column(
+                          children: [
+                            Stack(
+                              children: [
+                                _buildProfileAvatar(),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: GestureDetector(
+                                    onTap: _showAvatarPicker,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        gradient: AppGradients.primary,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
                                       ),
-                                    ),
-                                    child: _isUpdatingAvatar
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
+                                      child: _isUpdatingAvatar
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.edit,
+                                              size: 16,
                                               color: Colors.white,
                                             ),
-                                          )
-                                        : const Icon(
-                                            Icons.edit,
-                                            size: 16,
-                                            color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _student?.studentName ?? '',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _student?.studentId ?? '',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade600,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildInfoRow(
+                              Icons.school,
+                              'Course',
+                              _courseName ?? _student?.courseId ?? '',
+                              AppColors.primaryBlue,
+                              isDark,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Cloud Backup Section
+                    FadeInAnimation(
+                      delay: 150,
+                      child: _buildSectionHeader(
+                        'Cloud Backup',
+                        Icons.cloud_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FadeInAnimation(
+                      delay: 200,
+                      child: GlassCard(
+                        child: Column(
+                          children: [
+                            if (_latestBackup != null &&
+                                _latestBackup!.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  gradient: AppGradients.primary,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.cloud_done,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Latest Backup',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.white70,
+                                            ),
                                           ),
+                                          Text(
+                                            DateFormat(
+                                              'yyyy-MM-dd HH:mm:ss',
+                                            ).format(
+                                              DateTime.parse(
+                                                _latestBackup!['backup_date'],
+                                              ),
+                                            ),
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Size: ${_supabaseService.formatFileSize(_latestBackup!['backup_size'])}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.white70,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? AppColors.surfaceDark
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.cloud_off,
+                                      color: isDark
+                                          ? Colors.grey.shade500
+                                          : Colors.grey.shade600,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'No backups found. Create your first backup now.',
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isBackingUp
+                                        ? null
+                                        : _createBackup,
+                                    icon: _isBackingUp
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.cloud_upload),
+                                    label: Text(
+                                      _isBackingUp
+                                          ? 'Backing up...'
+                                          : 'Sync Backup',
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primaryBlue,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _showBackupListDialog,
+                                    icon: const Icon(Icons.list_alt),
+                                    label: const Text('View Backups'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_backupHistory.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
+                                  '${_backupHistory.length} backup(s) available',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark
+                                        ? Colors.grey.shade500
+                                        : Colors.grey.shade500,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _student?.studentName ?? '',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _student?.studentId ?? '',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isDark
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildInfoRow(
-                            Icons.school,
-                            'Course',
-                            _courseName ?? _student?.courseId ?? '',
-                            AppColors.primaryBlue,
-                            isDark,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                  // Cloud Backup Section
-                  FadeInAnimation(
-                    delay: 150,
-                    child: _buildSectionHeader(
-                      'Cloud Backup',
-                      Icons.cloud_outlined,
+                    // Appearance Section
+                    FadeInAnimation(
+                      delay: 250,
+                      child: _buildSectionHeader(
+                        'Appearance',
+                        Icons.palette_outlined,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  FadeInAnimation(
-                    delay: 200,
-                    child: GlassCard(
-                      child: Column(
-                        children: [
-                          if (_latestBackup != null &&
-                              _latestBackup!.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                gradient: AppGradients.primary,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.cloud_done,
+                    const SizedBox(height: 8),
+                    FadeInAnimation(
+                      delay: 300,
+                      child: GlassCard(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    gradient: AppGradients.goldGradient,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    themeProvider.themeMode == ThemeMode.dark
+                                        ? Icons.dark_mode
+                                        : Icons.light_mode,
                                     color: Colors.white,
+                                    size: 20,
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Latest Backup',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                        Text(
-                                          DateFormat(
-                                            'yyyy-MM-dd HH:mm:ss',
-                                          ).format(
-                                            DateTime.parse(
-                                              _latestBackup!['backup_date'],
-                                            ),
-                                          ),
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Size: ${_supabaseService.formatFileSize(_latestBackup!['backup_size'])}',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  themeProvider.themeMode == ThemeMode.dark
+                                      ? 'Dark Mode'
+                                      : 'Light Mode',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                ],
-                              ),
-                            )
-                          else
+                                ),
+                              ],
+                            ),
+                            Switch(
+                              value: themeProvider.themeMode == ThemeMode.dark,
+                              onChanged: (value) {
+                                themeProvider.toggleTheme(value);
+                              },
+                              activeColor: AppColors.primaryBlue,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Export Section
+                    FadeInAnimation(
+                      delay: 350,
+                      child: _buildSectionHeader(
+                        'Export',
+                        Icons.download_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FadeInAnimation(
+                      delay: 400,
+                      child: GlassCard(
+                        child: Column(
+                          children: [
+                            _buildExportOption(
+                              icon: Icons.description,
+                              title: 'Export Full Report',
+                              subtitle: 'Complete academic transcript',
+                              color: AppColors.success,
+                              onTap: () => _exportPdf(),
+                              isLoading:
+                                  _isExporting && _selectedSemester == null,
+                              isDark: isDark,
+                            ),
+                            const Divider(),
+                            _buildSemesterDropdown(isDark),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // About Section
+                    FadeInAnimation(
+                      delay: 450,
+                      child: _buildSectionHeader('About', Icons.info_outline),
+                    ),
+                    const SizedBox(height: 8),
+                    FadeInAnimation(
+                      delay: 500,
+                      child: GlassCard(
+                        child: Column(
+                          children: [
+                            _buildAboutRow('Version', '1.0.0', isDark),
+                            _buildAboutRow(
+                              'Developer',
+                              'ResultWave Team',
+                              isDark,
+                            ),
+                            _buildAboutRow(
+                              'Email',
+                              'support@resultwave.com',
+                              isDark,
+                            ),
+                            _buildAboutRow(
+                              'Website',
+                              'www.resultwave.com',
+                              isDark,
+                            ),
+                            const Divider(),
+                            _buildAboutRow(
+                              'Built with',
+                              'Flutter & Supabase',
+                              isDark,
+                            ),
+                            _buildAboutRow('License', 'MIT', isDark),
+                            const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isDark
-                                    ? AppColors.surfaceDark
-                                    : Colors.grey.shade100,
+                                color: AppColors.info.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
                                 children: [
                                   Icon(
-                                    Icons.cloud_off,
-                                    color: isDark
-                                        ? Colors.grey.shade500
-                                        : Colors.grey.shade600,
+                                    Icons.copyright,
+                                    size: 16,
+                                    color: AppColors.info,
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'No backups found. Create your first backup now.',
+                                      '© 2024 ResultWave. All rights reserved.',
                                       style: TextStyle(
+                                        fontSize: 11,
                                         color: isDark
                                             ? Colors.grey.shade400
                                             : Colors.grey.shade600,
@@ -914,265 +1133,216 @@ class _SettingsPageState extends State<SettingsPage>
                                 ],
                               ),
                             ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _isBackingUp
-                                      ? null
-                                      : _createBackup,
-                                  icon: _isBackingUp
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.cloud_upload),
-                                  label: Text(
-                                    _isBackingUp
-                                        ? 'Backing up...'
-                                        : 'Sync Backup',
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primaryBlue,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _showBackupListDialog,
-                                  icon: const Icon(Icons.list_alt),
-                                  label: const Text('View Backups'),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (_backupHistory.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Text(
-                                '${_backupHistory.length} backup(s) available',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark
-                                      ? Colors.grey.shade500
-                                      : Colors.grey.shade500,
-                                ),
-                              ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                  // Appearance Section
-                  FadeInAnimation(
-                    delay: 250,
-                    child: _buildSectionHeader(
-                      'Appearance',
-                      Icons.palette_outlined,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FadeInAnimation(
-                    delay: 300,
-                    child: GlassCard(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  gradient: AppGradients.goldGradient,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  themeProvider.themeMode == ThemeMode.dark
-                                      ? Icons.dark_mode
-                                      : Icons.light_mode,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
+                    // Logout Button at Bottom
+                    FadeInAnimation(
+                      delay: 550,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            onPressed: _logout,
+                            icon: const Icon(Icons.logout),
+                            label: const Text(
+                              'Logout',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
                               ),
-                              const SizedBox(width: 12),
-                              Text(
-                                themeProvider.themeMode == ThemeMode.dark
-                                    ? 'Dark Mode'
-                                    : 'Light Mode',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.error,
+                              side: const BorderSide(color: AppColors.error),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            ],
-                          ),
-                          Switch(
-                            value: themeProvider.themeMode == ThemeMode.dark,
-                            onChanged: (value) {
-                              themeProvider.toggleTheme(value);
-                            },
-                            activeColor: AppColors.primaryBlue,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Export Section
-                  FadeInAnimation(
-                    delay: 350,
-                    child: _buildSectionHeader(
-                      'Export',
-                      Icons.download_outlined,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FadeInAnimation(
-                    delay: 400,
-                    child: GlassCard(
-                      child: Column(
-                        children: [
-                          _buildExportOption(
-                            icon: Icons.description,
-                            title: 'Export Full Report',
-                            subtitle: 'Complete academic transcript',
-                            color: AppColors.success,
-                            onTap: () => _exportPdf(),
-                            isLoading:
-                                _isExporting && _selectedSemester == null,
-                            isDark: isDark,
-                          ),
-                          const Divider(),
-                          _buildSemesterDropdown(isDark),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // About Section
-                  FadeInAnimation(
-                    delay: 450,
-                    child: _buildSectionHeader('About', Icons.info_outline),
-                  ),
-                  const SizedBox(height: 8),
-                  FadeInAnimation(
-                    delay: 500,
-                    child: GlassCard(
-                      child: Column(
-                        children: [
-                          _buildAboutRow('Version', '1.0.0', isDark),
-                          _buildAboutRow(
-                            'Developer',
-                            'ResultWave Team',
-                            isDark,
-                          ),
-                          _buildAboutRow(
-                            'Email',
-                            'support@resultwave.com',
-                            isDark,
-                          ),
-                          _buildAboutRow(
-                            'Website',
-                            'www.resultwave.com',
-                            isDark,
-                          ),
-                          const Divider(),
-                          _buildAboutRow(
-                            'Built with',
-                            'Flutter & Supabase',
-                            isDark,
-                          ),
-                          _buildAboutRow('License', 'MIT', isDark),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.info.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.copyright,
-                                  size: 16,
-                                  color: AppColors.info,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '© 2024 ResultWave. All rights reserved.',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Logout Button at Bottom
-                  FadeInAnimation(
-                    delay: 550,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: OutlinedButton.icon(
-                          onPressed: _logout,
-                          icon: const Icon(Icons.logout),
-                          label: const Text(
-                            'Logout',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.error,
-                            side: const BorderSide(color: AppColors.error),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
       ),
+    );
+  }
+
+  Widget _buildSkeletonLoader(bool isDark) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Profile Section Skeleton
+        Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          child: GlassCard(
+            child: Column(
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: 150,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 100,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDark
+                            ? Colors.grey.shade800
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 120,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Backup Section Skeleton
+        Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          child: GlassCard(
+            child: Column(
+              children: [
+                Container(
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 45,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.grey.shade800
+                              : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        height: 45,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.grey.shade800
+                              : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Appearance Section Skeleton
+        Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          child: GlassCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.grey.shade800
+                          : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 50,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
