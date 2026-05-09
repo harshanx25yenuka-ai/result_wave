@@ -17,9 +17,17 @@ void main() async {
   try {
     await SupabaseService().initSupabase();
     print('Supabase initialized successfully');
+
+    // Test connection
+    final isConnected = await SupabaseService().testConnection();
+    if (isConnected) {
+      print('Supabase connection successful');
+    } else {
+      print('Supabase connection failed - running in offline mode');
+    }
   } catch (e) {
     print('Supabase initialization error: $e');
-    // App will continue working even if Supabase fails (offline mode)
+    print('App will continue working in offline mode');
   }
 
   runApp(

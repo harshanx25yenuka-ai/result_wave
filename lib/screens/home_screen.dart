@@ -3,6 +3,7 @@ import 'package:result_wave/pages/dashboard_page.dart';
 import 'package:result_wave/pages/results_page.dart';
 import 'package:result_wave/pages/settings_page.dart';
 import 'package:result_wave/services/auth_service.dart';
+import 'package:result_wave/services/supabase_service.dart';
 import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
@@ -22,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen>
   late List<Widget> _pages;
   late AnimationController _animationController;
   final AuthService _authService = AuthService();
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -70,7 +72,11 @@ class _HomeScreenState extends State<HomeScreen>
     );
 
     if (confirm == true) {
+      // Clear RLS context
+      await _supabaseService.logout();
+      // Clear local auth session
       await _authService.logout();
+
       if (mounted) {
         Navigator.pushReplacement(
           context,

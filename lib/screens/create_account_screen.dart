@@ -5,6 +5,7 @@ import 'package:result_wave/models/module.dart';
 import 'package:result_wave/models/result.dart';
 import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/services/database_service.dart';
+import 'package:result_wave/services/supabase_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -20,6 +21,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   final _formKey = GlobalKey<FormState>();
   final _studentIdController = TextEditingController();
   final _studentNameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
   String? _selectedCourseId;
   List<Course> _courses = [];
   bool _isLoading = true;
@@ -31,6 +35,17 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   bool _isIdValid = false;
   String _idError = '';
 
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  bool _hasCapital = false;
+  bool _hasLower = false;
+  bool _hasNumber = false;
+  bool _hasSpecial = false;
+  bool _hasMinLength = false;
+
+  final SupabaseService _supabaseService = SupabaseService();
+
   @override
   void initState() {
     super.initState();
@@ -40,8 +55,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     )..forward();
     _loadCourses();
 
-    // Add listener to validate student ID
     _studentIdController.addListener(_validateAndDetectCourse);
+    _passwordController.addListener(_validatePassword);
   }
 
   @override
@@ -49,8 +64,30 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     _controller.dispose();
     _studentIdController.dispose();
     _studentNameController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _studentIdController.removeListener(_validateAndDetectCourse);
+    _passwordController.removeListener(_validatePassword);
     super.dispose();
+  }
+
+  void _validatePassword() {
+    final password = _passwordController.text;
+    setState(() {
+      _hasCapital = password.contains(RegExp(r'[A-Z]'));
+      _hasLower = password.contains(RegExp(r'[a-z]'));
+      _hasNumber = password.contains(RegExp(r'[0-9]'));
+      _hasSpecial = password.contains(RegExp(r'[#\$%@_]'));
+      _hasMinLength = password.length >= 8;
+    });
+  }
+
+  bool get _isPasswordValid {
+    return _hasCapital &&
+        _hasLower &&
+        _hasNumber &&
+        _hasSpecial &&
+        _hasMinLength;
   }
 
   void _validateAndDetectCourse() {
@@ -95,11 +132,23 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
 
   Future<void> _createAccount() async {
     final studentId = _studentIdController.text.trim().toUpperCase();
+    final studentName = _studentNameController.text.trim().toUpperCase();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
 
-    // Validate student ID format
     final idError = Student.validateStudentId(studentId);
     if (idError != null) {
       _showMessage(idError, isError: true);
+      return;
+    }
+
+    if (!_isPasswordValid) {
+      _showMessage('Please meet all password requirements', isError: true);
+      return;
+    }
+
+    if (password != confirmPassword) {
+      _showMessage('Passwords do not match', isError: true);
       return;
     }
 
@@ -115,7 +164,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         return;
       }
 
-      // Find matching course
       final matchedCourse = _courses.firstWhere(
         (c) => c.courseId == courseIdFromPrefix,
         orElse: () =>
@@ -128,10 +176,33 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       });
 
       try {
+        final userExists = await _supabaseService.userExists(studentId);
+        if (userExists) {
+          _showMessage(
+            'User already exists with this Student ID',
+            isError: true,
+          );
+          setState(() => _isCreating = false);
+          return;
+        }
+
+        final result = await _supabaseService.createUser(
+          studentId: studentId,
+          studentName: studentName,
+          courseId: _selectedCourseId!,
+          password: password,
+        );
+
+        if (!result['success']) {
+          _showMessage(result['error'], isError: true);
+          setState(() => _isCreating = false);
+          return;
+        }
+
         await DatabaseService().insertStudent(
           Student(
             studentId: studentId,
-            studentName: _studentNameController.text.trim().toUpperCase(),
+            studentName: studentName,
             courseId: _selectedCourseId!,
           ),
         );
@@ -139,7 +210,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         List<Module> modules = await DatabaseService().getModulesByCourse(
           _selectedCourseId!,
         );
-
         for (var module in modules) {
           await DatabaseService().insertResult(
             Result(moduleId: module.moduleId, grade: 'N/A'),
@@ -163,6 +233,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     }
   }
 
+  void _navigateToLogin() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => LoginScreen()),
+    );
+  }
+
   void _showMessage(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -175,9 +252,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(gradient: AppGradients.primary),
+        decoration: BoxDecoration(
+          gradient: isDark
+              ? AppGradients.darkBackgroundGradient
+              : AppGradients.primary,
+        ),
         child: SafeArea(
           child: _isLoading
               ? const Center(
@@ -190,9 +273,53 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      // Back button and Login button in same row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(
+                              Icons.arrow_back,
+                              color: Colors.white,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _navigateToLogin,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.3),
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.login,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Login',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 20),
                       Center(
@@ -250,8 +377,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                               children: [
                                 _buildStepIndicator(),
                                 const SizedBox(height: 24),
-                                if (_currentStep == 0) _buildStudentInfoStep(),
-                                if (_currentStep == 1) _buildCourseInfo(),
+                                if (_currentStep == 0)
+                                  _buildStudentInfoStep(isDark),
+                                if (_currentStep == 1)
+                                  _buildPasswordStep(isDark),
+                                if (_currentStep == 2) _buildCourseInfo(isDark),
                                 const SizedBox(height: 24),
                                 Row(
                                   children: [
@@ -280,36 +410,58 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                         onPressed: _isCreating
                                             ? null
                                             : () {
-                                                if (_currentStep == 1) {
+                                                if (_currentStep == 2) {
                                                   _createAccount();
                                                 } else {
-                                                  // Validate before proceeding
-                                                  if (_studentIdController.text
-                                                      .trim()
-                                                      .isEmpty) {
-                                                    _showMessage(
-                                                      'Please enter Student ID',
-                                                      isError: true,
-                                                    );
-                                                  } else if (!_isIdValid) {
-                                                    _showMessage(
-                                                      _idError.isEmpty
-                                                          ? 'Please enter a valid Student ID'
-                                                          : _idError,
-                                                      isError: true,
-                                                    );
-                                                  } else if (_studentNameController
-                                                      .text
-                                                      .trim()
-                                                      .isEmpty) {
-                                                    _showMessage(
-                                                      'Please enter Student Name',
-                                                      isError: true,
-                                                    );
-                                                  } else {
-                                                    setState(
-                                                      () => _currentStep++,
-                                                    );
+                                                  if (_currentStep == 0) {
+                                                    if (_studentIdController
+                                                        .text
+                                                        .trim()
+                                                        .isEmpty) {
+                                                      _showMessage(
+                                                        'Please enter Student ID',
+                                                        isError: true,
+                                                      );
+                                                    } else if (!_isIdValid) {
+                                                      _showMessage(
+                                                        _idError.isEmpty
+                                                            ? 'Please enter a valid Student ID'
+                                                            : _idError,
+                                                        isError: true,
+                                                      );
+                                                    } else if (_studentNameController
+                                                        .text
+                                                        .trim()
+                                                        .isEmpty) {
+                                                      _showMessage(
+                                                        'Please enter Student Name',
+                                                        isError: true,
+                                                      );
+                                                    } else {
+                                                      setState(
+                                                        () => _currentStep++,
+                                                      );
+                                                    }
+                                                  } else if (_currentStep ==
+                                                      1) {
+                                                    if (!_isPasswordValid) {
+                                                      _showMessage(
+                                                        'Please meet all password requirements',
+                                                        isError: true,
+                                                      );
+                                                    } else if (_passwordController
+                                                            .text !=
+                                                        _confirmPasswordController
+                                                            .text) {
+                                                      _showMessage(
+                                                        'Passwords do not match',
+                                                        isError: true,
+                                                      );
+                                                    } else {
+                                                      setState(
+                                                        () => _currentStep++,
+                                                      );
+                                                    }
                                                   }
                                                 }
                                               },
@@ -338,7 +490,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                 ),
                                               )
                                             : Text(
-                                                _currentStep == 1
+                                                _currentStep == 2
                                                     ? 'Create Account'
                                                     : 'Next',
                                                 style: const TextStyle(
@@ -349,6 +501,43 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                       ),
                                     ),
                                   ],
+                                ),
+                                const SizedBox(height: 16),
+                                // Login option at the bottom
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.info.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: AppColors.info.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Already have an account? ',
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      GestureDetector(
+                                        onTap: _navigateToLogin,
+                                        child: Text(
+                                          'Sign In',
+                                          style: TextStyle(
+                                            color: AppColors.info,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -375,7 +564,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 : Colors.grey.shade300,
           ),
         ),
-        _buildStepCircle(1, 'Verify'),
+        _buildStepCircle(1, 'Password'),
+        Expanded(
+          child: Container(
+            height: 2,
+            color: _currentStep >= 2
+                ? AppColors.primaryBlue
+                : Colors.grey.shade300,
+          ),
+        ),
+        _buildStepCircle(2, 'Verify'),
       ],
     );
   }
@@ -418,16 +616,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     );
   }
 
-  Widget _buildStudentInfoStep() {
+  Widget _buildStudentInfoStep(bool isDark) {
     return Column(
       children: [
         TextFormField(
           controller: _studentIdController,
           decoration: InputDecoration(
             labelText: 'Student ID',
-            hintText: 'SOF/21/B1/11',
-            helperText:
-                'Format: XXX/XX/BX/XX\nXXX = SOF, MMW, or NET | BX = B1 or B2',
+            helperText: 'Format: XXX/XX/BX/XX (SOF, MMW, or NET)',
             prefixIcon: Icon(Icons.badge, color: AppColors.primaryBlue),
             suffixIcon: _isIdValid
                 ? Icon(Icons.check_circle, color: AppColors.success)
@@ -439,7 +635,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               borderSide: BorderSide.none,
             ),
             filled: true,
-            fillColor: Colors.grey.shade50,
+            fillColor: isDark ? AppColors.surfaceDark : Colors.grey.shade50,
             errorText:
                 _studentIdController.text.trim().isNotEmpty &&
                     !_isIdValid &&
@@ -447,15 +643,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 ? _idError
                 : null,
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Please enter Student ID';
-            }
-            return Student.validateStudentId(value);
-          },
           textCapitalization: TextCapitalization.characters,
           inputFormatters: [
-            // Only allow letters, numbers, and slashes
             FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9/]')),
           ],
         ),
@@ -488,7 +677,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                         'Course: $_detectedCourse',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey.shade700,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade700,
                         ),
                       ),
                     ],
@@ -508,7 +699,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               borderSide: BorderSide.none,
             ),
             filled: true,
-            fillColor: Colors.grey.shade50,
+            fillColor: isDark ? AppColors.surfaceDark : Colors.grey.shade50,
           ),
           validator: (value) => value == null || value.trim().isEmpty
               ? 'Enter Student Name'
@@ -518,7 +709,125 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     );
   }
 
-  Widget _buildCourseInfo() {
+  Widget _buildPasswordStep(bool isDark) {
+    return Column(
+      children: [
+        TextFormField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          decoration: InputDecoration(
+            labelText: 'Password',
+            prefixIcon: Icon(Icons.lock, color: AppColors.primaryBlue),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                color: AppColors.primaryBlue,
+              ),
+              onPressed: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: isDark ? AppColors.surfaceDark : Colors.grey.shade50,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: (_isPasswordValid ? AppColors.success : AppColors.warning)
+                .withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: (_isPasswordValid ? AppColors.success : AppColors.warning)
+                  .withOpacity(0.3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Password Requirements:',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildRequirementTile('At least 8 characters', _hasMinLength),
+              _buildRequirementTile('Capital letter (A-Z)', _hasCapital),
+              _buildRequirementTile('Simple letter (a-z)', _hasLower),
+              _buildRequirementTile('Number (0-9)', _hasNumber),
+              _buildRequirementTile(
+                'Special character (#, \$, _, @)',
+                _hasSpecial,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _confirmPasswordController,
+          obscureText: _obscureConfirmPassword,
+          decoration: InputDecoration(
+            labelText: 'Confirm Password',
+            prefixIcon: Icon(Icons.lock_outline, color: AppColors.primaryBlue),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscureConfirmPassword
+                    ? Icons.visibility_off
+                    : Icons.visibility,
+                color: AppColors.primaryBlue,
+              ),
+              onPressed: () {
+                setState(() {
+                  _obscureConfirmPassword = !_obscureConfirmPassword;
+                });
+              },
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: isDark ? AppColors.surfaceDark : Colors.grey.shade50,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRequirementTile(String text, bool isValid) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(
+            isValid ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 16,
+            color: isValid ? AppColors.success : AppColors.warning,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11,
+              color: isValid ? AppColors.success : AppColors.warning,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCourseInfo(bool isDark) {
     final studentId = _studentIdController.text.trim().toUpperCase();
     final prefix = Student.getCoursePrefixFromId(studentId);
     final batch = Student.getBatchFromId(studentId);
@@ -556,7 +865,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               const Icon(Icons.verified, color: Colors.white, size: 48),
               const SizedBox(height: 12),
               Text(
-                'Course Matched!',
+                'Account Ready!',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -701,7 +1010,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                         courseDescription,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade700,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade700,
                         ),
                       ),
                     ),

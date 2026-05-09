@@ -90,7 +90,7 @@ class _SettingsPageState extends State<SettingsPage>
         studentId: widget.studentId,
       );
     } catch (e) {
-      // Handle error silently
+      print('Load backup info error: $e');
     }
 
     setState(() {
@@ -114,10 +114,15 @@ class _SettingsPageState extends State<SettingsPage>
       );
 
       if (result['success']) {
+        // Reload backup info immediately after successful backup
         await _loadBackupInfo();
+
         final action = result['isUpdate'] == true ? 'updated' : 'created';
+        final backupDate = result['backupDate'] as DateTime;
+        final backupSize = result['backupSize'] as int;
+
         _showMessage(
-          'Backup $action successfully!\nDate: ${DateFormat('yyyy-MM-dd HH:mm').format(result['backupDate'])}\nSize: ${_supabaseService.formatFileSize(result['backupSize'])}',
+          'Backup $action successfully!\nDate: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(backupDate)}\nSize: ${_supabaseService.formatFileSize(backupSize)}',
           isError: false,
         );
       } else {
@@ -127,6 +132,85 @@ class _SettingsPageState extends State<SettingsPage>
       _showMessage('Error creating backup: $e', isError: true);
     } finally {
       setState(() => _isBackingUp = false);
+    }
+  }
+
+  Future<void> _deleteBackup(Map<String, dynamic> backup) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Backup'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Are you sure you want to delete this backup?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⚠️ This action cannot be undone.',
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Date: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.parse(backup['backup_date']))}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    'Size: ${_supabaseService.formatFileSize(backup['backup_size'])}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isRestoring = true);
+
+    try {
+      final success = await _supabaseService.deleteBackup(backup['id']);
+
+      if (success) {
+        await _loadBackupInfo();
+        _showMessage('Backup deleted successfully', isError: false);
+      } else {
+        _showMessage('Failed to delete backup', isError: true);
+      }
+    } catch (e) {
+      _showMessage('Error deleting backup: $e', isError: true);
+    } finally {
+      setState(() => _isRestoring = false);
     }
   }
 
@@ -179,149 +263,177 @@ class _SettingsPageState extends State<SettingsPage>
         maxChildSize: 0.9,
         minChildSize: 0.5,
         expand: false,
-        builder: (context, scrollController) => Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+        builder: (context, scrollController) => StatefulBuilder(
+          builder: (context, setStateModal) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Backup History',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: _backupHistory.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.cloud_off,
-                              size: 64,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No backups found',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: _backupHistory.length,
-                        itemBuilder: (context, index) {
-                          final backup = _backupHistory[index];
-                          final backupDate = DateTime.parse(
-                            backup['backup_date'],
-                          );
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: index == 0
-                                  ? AppGradients.primary
-                                  : null,
-                              color: index == 0 ? null : Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: index == 0
-                                    ? Colors.transparent
-                                    : Colors.grey.shade200,
-                              ),
-                            ),
-                            child: Row(
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Backup List',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Manage your backups - only latest backup is kept',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: _backupHistory.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Container(
-                                  width: 45,
-                                  height: 45,
-                                  decoration: BoxDecoration(
-                                    color: index == 0
-                                        ? Colors.white.withOpacity(0.2)
-                                        : AppColors.primaryBlue.withOpacity(
-                                            0.1,
-                                          ),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    Icons.backup,
-                                    color: index == 0
-                                        ? Colors.white
-                                        : AppColors.primaryBlue,
-                                  ),
+                                Icon(
+                                  Icons.cloud_off,
+                                  size: 64,
+                                  color: Colors.grey.shade400,
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      if (index == 0)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.gold,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'Latest',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      Text(
-                                        DateFormat(
-                                          'yyyy-MM-dd HH:mm:ss',
-                                        ).format(backupDate),
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: index == 0
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Size: ${_supabaseService.formatFileSize(backup['backup_size'])}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: index == 0
-                                              ? Colors.white70
-                                              : Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No backups found',
+                                  style: TextStyle(color: Colors.grey.shade600),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Click "Sync Backup" to create your first backup',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade500,
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        },
-                      ),
+                          )
+                        : ListView.builder(
+                            controller: scrollController,
+                            itemCount: _backupHistory.length,
+                            itemBuilder: (context, index) {
+                              final backup = _backupHistory[index];
+                              final backupDate = DateTime.parse(
+                                backup['backup_date'],
+                              );
+                              final isLatest = index == 0;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  gradient: isLatest
+                                      ? AppGradients.primary
+                                      : null,
+                                  color: isLatest ? null : Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isLatest
+                                        ? Colors.transparent
+                                        : Colors.grey.shade200,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 45,
+                                      height: 45,
+                                      decoration: BoxDecoration(
+                                        color: isLatest
+                                            ? Colors.white.withOpacity(0.2)
+                                            : AppColors.primaryBlue.withOpacity(
+                                                0.1,
+                                              ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.backup,
+                                        color: isLatest
+                                            ? Colors.white
+                                            : AppColors.primaryBlue,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          if (isLatest)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.gold,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: const Text(
+                                                'Latest',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          Text(
+                                            DateFormat(
+                                              'yyyy-MM-dd HH:mm:ss',
+                                            ).format(backupDate),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: isLatest
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Size: ${_supabaseService.formatFileSize(backup['backup_size'])}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isLatest
+                                                  ? Colors.white70
+                                                  : Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Delete button only
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: isLatest
+                                            ? Colors.white70
+                                            : AppColors.error,
+                                      ),
+                                      onPressed: () => _deleteBackup(backup),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -390,6 +502,7 @@ class _SettingsPageState extends State<SettingsPage>
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -405,7 +518,7 @@ class _SettingsPageState extends State<SettingsPage>
       ),
       body: Container(
         decoration: BoxDecoration(
-          gradient: Theme.of(context).brightness == Brightness.dark
+          gradient: isDark
               ? AppGradients.darkBackgroundGradient
               : AppGradients.backgroundGradient,
         ),
@@ -438,7 +551,9 @@ class _SettingsPageState extends State<SettingsPage>
                             _student?.studentId ?? '',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey.shade600,
+                              color: isDark
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -447,6 +562,7 @@ class _SettingsPageState extends State<SettingsPage>
                             'Course',
                             _student?.courseId ?? '',
                             AppColors.primaryBlue,
+                            isDark,
                           ),
                         ],
                       ),
@@ -468,7 +584,7 @@ class _SettingsPageState extends State<SettingsPage>
                     child: GlassCard(
                       child: Column(
                         children: [
-                          // Latest Backup Info
+                          // Latest Backup Info - Shows real-time data
                           if (_latestBackup != null &&
                               _latestBackup!.isNotEmpty)
                             Container(
@@ -497,7 +613,9 @@ class _SettingsPageState extends State<SettingsPage>
                                           ),
                                         ),
                                         Text(
-                                          DateFormat('yyyy-MM-dd HH:mm').format(
+                                          DateFormat(
+                                            'yyyy-MM-dd HH:mm:ss',
+                                          ).format(
                                             DateTime.parse(
                                               _latestBackup!['backup_date'],
                                             ),
@@ -525,19 +643,28 @@ class _SettingsPageState extends State<SettingsPage>
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
+                                color: isDark
+                                    ? AppColors.surfaceDark
+                                    : Colors.grey.shade100,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
                                 children: [
                                   Icon(
                                     Icons.cloud_off,
-                                    color: Colors.grey.shade600,
+                                    color: isDark
+                                        ? Colors.grey.shade500
+                                        : Colors.grey.shade600,
                                   ),
                                   const SizedBox(width: 12),
-                                  const Expanded(
+                                  Expanded(
                                     child: Text(
                                       'No backups found. Create your first backup now.',
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade600,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -580,8 +707,8 @@ class _SettingsPageState extends State<SettingsPage>
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: _showBackupHistoryDialog,
-                                  icon: const Icon(Icons.history),
-                                  label: const Text('Backup History'),
+                                  icon: const Icon(Icons.list_alt),
+                                  label: const Text('View Backups'),
                                   style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 12,
@@ -601,7 +728,9 @@ class _SettingsPageState extends State<SettingsPage>
                                 '${_backupHistory.length} backup(s) available',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: Colors.grey.shade500,
+                                  color: isDark
+                                      ? Colors.grey.shade500
+                                      : Colors.grey.shade500,
                                 ),
                               ),
                             ),
@@ -689,9 +818,10 @@ class _SettingsPageState extends State<SettingsPage>
                             onTap: () => _exportPdf(),
                             isLoading:
                                 _isExporting && _selectedSemester == null,
+                            isDark: isDark,
                           ),
                           const Divider(),
-                          _buildSemesterDropdown(),
+                          _buildSemesterDropdown(isDark),
                         ],
                       ),
                     ),
@@ -709,9 +839,17 @@ class _SettingsPageState extends State<SettingsPage>
                     child: GlassCard(
                       child: Column(
                         children: [
-                          _buildAboutRow('Version', '1.0.0'),
-                          _buildAboutRow('Developer', 'ResultWave Team'),
-                          _buildAboutRow('Contact', 'support@resultwave.com'),
+                          _buildAboutRow('Version', '1.0.0', isDark),
+                          _buildAboutRow(
+                            'Developer',
+                            'ResultWave Team',
+                            isDark,
+                          ),
+                          _buildAboutRow(
+                            'Contact',
+                            'support@resultwave.com',
+                            isDark,
+                          ),
                         ],
                       ),
                     ),
@@ -771,7 +909,13 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value, Color color) {
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+    bool isDark,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -791,13 +935,17 @@ class _SettingsPageState extends State<SettingsPage>
               children: [
                 Text(
                   label,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+                  ),
                 ),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : null,
                   ),
                 ),
               ],
@@ -815,6 +963,7 @@ class _SettingsPageState extends State<SettingsPage>
     required Color color,
     required VoidCallback onTap,
     required bool isLoading,
+    required bool isDark,
   }) {
     return ListTile(
       leading: Container(
@@ -828,7 +977,10 @@ class _SettingsPageState extends State<SettingsPage>
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(
         subtitle,
-        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        style: TextStyle(
+          fontSize: 12,
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+        ),
       ),
       trailing: isLoading
           ? SizedBox(
@@ -839,13 +991,13 @@ class _SettingsPageState extends State<SettingsPage>
           : Icon(
               Icons.arrow_forward_ios,
               size: 16,
-              color: Colors.grey.shade400,
+              color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
             ),
       onTap: onTap,
     );
   }
 
-  Widget _buildSemesterDropdown() {
+  Widget _buildSemesterDropdown(bool isDark) {
     return DropdownButtonFormField<int>(
       decoration: InputDecoration(
         labelText: 'Export Specific Semester',
@@ -867,14 +1019,25 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  Widget _buildAboutRow(String label, String value) {
+  Widget _buildAboutRow(String label, String value, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade600)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white : null,
+            ),
+          ),
         ],
       ),
     );
