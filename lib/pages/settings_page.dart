@@ -13,7 +13,6 @@ import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsPage extends StatefulWidget {
   final String studentId;
@@ -41,7 +40,6 @@ class _SettingsPageState extends State<SettingsPage>
   final SupabaseService _supabaseService = SupabaseService();
   final AuthService _authService = AuthService();
 
-  // Avatar related
   List<Avatar> _avatars = [];
   int? _selectedAvatarId;
   bool _isUpdatingAvatar = false;
@@ -86,7 +84,6 @@ class _SettingsPageState extends State<SettingsPage>
     );
     _semesters = modules.map((m) => m.semester).toSet().toList()..sort();
 
-    // Get course name
     final courses = await DatabaseService().getCourses();
     final course = courses.firstWhere((c) => c.courseId == _student!.courseId);
     _courseName = course.courseName;
@@ -132,6 +129,7 @@ class _SettingsPageState extends State<SettingsPage>
           _selectedAvatarId = avatarId;
         });
         _showMessage('Avatar updated successfully!', isError: false);
+        await _loadUserAvatar();
       } else {
         _showMessage(
           'Failed to update avatar: ${result['error']}',
@@ -193,7 +191,6 @@ class _SettingsPageState extends State<SettingsPage>
                     itemCount: _avatars.length + 1,
                     itemBuilder: (context, index) {
                       if (index == 0) {
-                        // Default avatar option (no avatar)
                         final isSelected = _selectedAvatarId == null;
                         return GestureDetector(
                           onTap: () {
@@ -742,7 +739,6 @@ class _SettingsPageState extends State<SettingsPage>
                     child: GlassCard(
                       child: Column(
                         children: [
-                          // Avatar with edit button
                           Stack(
                             children: [
                               _buildProfileAvatar(),
@@ -1158,7 +1154,7 @@ class _SettingsPageState extends State<SettingsPage>
                           ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.error,
-                            side: BorderSide(color: AppColors.error),
+                            side: const BorderSide(color: AppColors.error),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1199,7 +1195,6 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildProfileAvatar() {
-    // Find selected avatar
     final selectedAvatar = _avatars.firstWhere(
       (a) => a.id == _selectedAvatarId,
       orElse: () => Avatar(id: 0, avatarPath: ''),

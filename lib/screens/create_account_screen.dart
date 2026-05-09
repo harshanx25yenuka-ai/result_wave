@@ -737,9 +737,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           ),
         ),
         const SizedBox(height: 16),
-        // Horizontal scroll for avatars - 100% circular
         SizedBox(
-          height: 90,
+          height: 100,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _avatars.length,
@@ -753,37 +752,36 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   });
                 },
                 child: Container(
-                  width: 80,
-                  height: 80,
+                  width: 90,
+                  height: 90,
                   margin: const EdgeInsets.only(right: 16),
                   child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      // Circular avatar with ClipOval
                       ClipOval(
                         child: Image.asset(
                           avatar.avatarPath,
-                          width: 80,
-                          height: 80,
+                          width: 90,
+                          height: 90,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             return Container(
-                              width: 80,
-                              height: 80,
+                              width: 90,
+                              height: 90,
                               color: Colors.grey.shade300,
                               child: const Icon(
                                 Icons.person,
-                                size: 40,
+                                size: 45,
                                 color: Colors.white,
                               ),
                             );
                           },
                         ),
                       ),
-                      // Selection border
                       if (isSelected)
                         Container(
-                          width: 80,
-                          height: 80,
+                          width: 90,
+                          height: 90,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
@@ -799,22 +797,19 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                             ],
                           ),
                         ),
-                      // Selection checkmark
                       if (isSelected)
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: AppColors.primaryBlue,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.check,
-                              size: 14,
-                              color: Colors.white,
-                            ),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBlue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            size: 18,
+                            color: Colors.white,
                           ),
                         ),
                     ],

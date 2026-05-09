@@ -12,20 +12,4 @@ class SupabaseConfig {
   // Timeouts
   static const Duration connectionTimeout = Duration(seconds: 30);
   static const Duration backupTimeout = Duration(minutes: 2);
-
-  // Helper to set current student ID for RLS
-  static Future<void> setCurrentStudentId(String studentId) async {
-    await Supabase.instance.client.rpc(
-      'set_current_student_id',
-      params: {'student_id': studentId},
-    );
-  }
-
-  // Helper to clear current student ID for RLS
-  static Future<void> clearCurrentStudentId() async {
-    await Supabase.instance.client.rpc(
-      'set_current_student_id',
-      params: {'student_id': ''},
-    );
-  }
 }

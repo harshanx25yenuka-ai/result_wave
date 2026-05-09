@@ -114,6 +114,10 @@ class _LoginScreenState extends State<LoginScreen>
         }
       }
 
+      // Pre-load avatar and backup data for settings page
+      await _supabaseService.getUserAvatar(studentId);
+      await _supabaseService.getLatestBackup(studentId);
+
       await _checkAndRestoreBackup(studentId);
       await _authService.setLoggedIn(studentId);
 
