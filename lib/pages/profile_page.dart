@@ -8,16 +8,16 @@ import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfilePage extends StatefulWidget {
   final String studentId;
 
-  const ProfileScreen({Key? key, required this.studentId}) : super(key: key);
+  const ProfilePage({Key? key, required this.studentId}) : super(key: key);
 
   @override
-  _ProfileScreenState createState() => _ProfileScreenState();
+  _ProfilePageState createState() => _ProfilePageState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
+class _ProfilePageState extends State<ProfilePage>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   Student? _student;
@@ -66,7 +66,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         setState(() {
           _selectedAvatarId = cachedAvatarId;
         });
-        print('Loaded avatar from cache: $cachedAvatarId');
       }
     } catch (e) {
       print('Error loading profile: $e');
@@ -263,7 +262,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Profile'), centerTitle: true),
+        appBar: AppBar(
+          title: const Text('Profile'),
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(

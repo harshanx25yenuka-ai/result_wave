@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:result_wave/pages/dashboard_page.dart';
 import 'package:result_wave/pages/results_page.dart';
-import 'package:result_wave/screens/profile_screen.dart';
+import 'package:result_wave/pages/profile_page.dart';
 import 'package:result_wave/services/auth_service.dart';
 import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/utils/constants.dart';
@@ -26,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _pages = [
       DashboardPage(studentId: widget.studentId),
       ResultsPage(studentId: widget.studentId),
-      ProfileScreen(studentId: widget.studentId),
+      ProfilePage(studentId: widget.studentId),
     ];
   }
 

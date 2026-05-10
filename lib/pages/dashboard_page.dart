@@ -4,14 +4,15 @@ import 'package:result_wave/models/result.dart';
 import 'package:result_wave/models/grade.dart';
 import 'package:result_wave/models/student.dart';
 import 'package:result_wave/models/course.dart';
+import 'package:result_wave/screens/settings_screen.dart';
 import 'package:result_wave/pages/insights_page.dart';
-import 'package:result_wave/pages/settings_page.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
 import 'package:result_wave/widgets/insight_card.dart';
 import 'package:result_wave/widgets/gauge_chart.dart';
+import 'package:result_wave/core/gpa_system.dart';
 
 class DashboardPage extends StatefulWidget {
   final String studentId;
@@ -67,212 +68,202 @@ class _DashboardPageState extends State<DashboardPage>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
-    Student student = (await DatabaseService().getStudents()).firstWhere(
-      (s) => s.studentId == widget.studentId,
-    );
-    List<Module> modules = await DatabaseService().getModulesByCourse(
-      student.courseId,
-    );
-    List<Result> results = await DatabaseService().getResults();
-    List<Grade> grades = await DatabaseService().getGrades();
-    List<Course> courses = await DatabaseService().getCourses();
+    try {
+      Student student = (await DatabaseService().getStudents()).firstWhere(
+        (s) => s.studentId == widget.studentId,
+      );
+      List<Module> modules = await DatabaseService().getModulesByCourse(
+        student.courseId,
+      );
+      List<Result> results = await DatabaseService().getResults();
+      List<Grade> grades = await DatabaseService().getGrades();
+      List<Course> courses = await DatabaseService().getCourses();
 
-    _studentName = student.studentName;
-    _courseName = courses
-        .firstWhere((c) => c.courseId == student.courseId)
-        .courseName;
+      _studentName = student.studentName;
+      _courseName = courses
+          .firstWhere((c) => c.courseId == student.courseId)
+          .courseName;
 
-    List<Module> gpaModules = modules.where((m) => m.isGpaModule).toList();
-    List<Module> nonGpaModules = modules
-        .where((m) => m.isNonGpaModule)
-        .toList();
+      List<Module> gpaModules = modules.where((m) => m.isGpaModule).toList();
+      List<Module> nonGpaModules = modules
+          .where((m) => m.isNonGpaModule)
+          .toList();
 
-    Map<int, List<Module>> semesterGpaModules = {};
-    Map<int, List<Module>> semesterNonGpaModules = {};
+      Map<int, List<Module>> semesterGpaModules = {};
+      Map<int, List<Module>> semesterNonGpaModules = {};
 
-    for (var module in gpaModules) {
-      semesterGpaModules.putIfAbsent(module.semester, () => []).add(module);
-    }
-    for (var module in nonGpaModules) {
-      semesterNonGpaModules.putIfAbsent(module.semester, () => []).add(module);
-    }
+      for (var module in gpaModules) {
+        semesterGpaModules.putIfAbsent(module.semester, () => []).add(module);
+      }
+      for (var module in nonGpaModules) {
+        semesterNonGpaModules
+            .putIfAbsent(module.semester, () => [])
+            .add(module);
+      }
 
-    Map<int, double> semesterGPAs = {};
-    Map<int, int> semesterGpaCredits = {};
+      // Use GPASystem to calculate semester GPAs
+      Map<int, double> semesterGPAs = {};
+      Map<int, int> semesterGpaCredits = {};
 
-    for (var semester in semesterGpaModules.keys) {
-      int totalCredits = 0;
-      double totalPoints = 0.0;
-      bool hasResults = false;
+      for (var semester in semesterGpaModules.keys) {
+        int totalCredits = 0;
+        for (var module in semesterGpaModules[semester]!) {
+          totalCredits += module.credits;
+        }
+        semesterGpaCredits[semester] = totalCredits;
 
-      for (var module in semesterGpaModules[semester]!) {
-        totalCredits += module.credits;
-        var result = results.firstWhere(
-          (r) => r.moduleId == module.moduleId,
-          orElse: () => Result(moduleId: module.moduleId, grade: 'N/A'),
+        final semesterGPA = GPASystem.calculateSemesterGPA(
+          modules: semesterGpaModules[semester]!,
+          results: results,
+          grades: grades,
         );
-        var grade = grades.firstWhere(
-          (g) => g.grade == result.grade,
-          orElse: () => Grade(grade: 'N/A', gradePoint: 0.0, status: ''),
-        );
-        if (result.grade != 'N/A') {
-          totalPoints += grade.gradePoint * module.credits;
-          hasResults = true;
+        if (semesterGPA > 0) {
+          semesterGPAs[semester] = semesterGPA;
         }
       }
 
-      if (hasResults && totalCredits > 0) {
-        semesterGPAs[semester] = totalPoints / totalCredits;
-        semesterGpaCredits[semester] = totalCredits;
+      // Calculate Non-GPA pass counts
+      Map<int, int> semesterPassedNonGpa = {};
+      Map<int, int> semesterTotalNonGpa = {};
+
+      for (var semester in semesterNonGpaModules.keys) {
+        int passedCount = 0;
+        int totalCount = semesterNonGpaModules[semester]!.length;
+
+        for (var module in semesterNonGpaModules[semester]!) {
+          var result = results.firstWhere(
+            (r) => r.moduleId == module.moduleId,
+            orElse: () => Result(moduleId: module.moduleId, grade: 'N/A'),
+          );
+          if (GPASystem.isNonGpaPassed(result.grade)) passedCount++;
+        }
+
+        semesterPassedNonGpa[semester] = passedCount;
+        semesterTotalNonGpa[semester] = totalCount;
       }
-    }
 
-    Map<int, int> semesterPassedNonGpa = {};
-    Map<int, int> semesterTotalNonGpa = {};
-
-    for (var semester in semesterNonGpaModules.keys) {
-      int passedCount = 0;
-      int totalCount = semesterNonGpaModules[semester]!.length;
-
-      for (var module in semesterNonGpaModules[semester]!) {
-        var result = results.firstWhere(
-          (r) => r.moduleId == module.moduleId,
-          orElse: () => Result(moduleId: module.moduleId, grade: 'N/A'),
-        );
-        if (_isNonGpaPassed(result.grade)) passedCount++;
-      }
-
-      semesterPassedNonGpa[semester] = passedCount;
-      semesterTotalNonGpa[semester] = totalCount;
-    }
-
-    double totalCoursePoints = 0.0;
-    int totalCourseCredits = 0;
-    for (var semester in semesterGPAs.keys) {
-      totalCoursePoints +=
-          semesterGPAs[semester]! * semesterGpaCredits[semester]!;
-      totalCourseCredits += semesterGpaCredits[semester]!;
-    }
-    double courseGPA = totalCourseCredits > 0
-        ? totalCoursePoints / totalCourseCredits
-        : 0.0;
-
-    bool allNonGpaPassed = true;
-    for (var semester in semesterNonGpaModules.keys) {
-      if (semesterPassedNonGpa[semester] != semesterTotalNonGpa[semester]) {
-        allNonGpaPassed = false;
-        break;
-      }
-    }
-
-    bool isEligible = courseGPA >= 2.0 && allNonGpaPassed;
-
-    String degreeStatus = '';
-    if (isEligible) {
-      degreeStatus = 'Eligible for Degree';
-    } else {
-      if (!allNonGpaPassed) {
-        degreeStatus = 'Not Eligible: Non-GPA modules need C or above';
-      } else if (courseGPA < 2.0) {
-        degreeStatus = 'Not Eligible: GPA below 2.0';
-      } else {
-        degreeStatus = 'Not Eligible';
-      }
-    }
-
-    int insightsCount = 0;
-    for (var result in results) {
-      if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
-        insightsCount++;
-      }
-      if (['I', 'I(ET)', 'I(CA)'].contains(result.grade)) {
-        insightsCount++;
-      }
-    }
-    if (courseGPA < 2.0)
-      insightsCount++;
-    else if (courseGPA < 2.5)
-      insightsCount++;
-
-    for (var semester in semesterGPAs.keys) {
-      if (semesterGPAs[semester]! < 2.0) insightsCount++;
-    }
-
-    for (var semester in semesterNonGpaModules.keys) {
-      int passed = semesterPassedNonGpa[semester] ?? 0;
-      int total = semesterTotalNonGpa[semester] ?? 0;
-      if (passed < total) insightsCount++;
-    }
-    if (!isEligible) insightsCount++;
-    if (insightsCount == 0) insightsCount = 1;
-
-    List<Map<String, dynamic>> failedModules = [];
-    List<Map<String, dynamic>> incompleteModules = [];
-
-    for (var result in results) {
-      var module = modules.firstWhere(
-        (m) => m.moduleId == result.moduleId,
-        orElse: () => Module(
-          moduleId: result.moduleId,
-          moduleName: '',
-          credits: 0,
-          courseIds: [],
-          semester: 0,
-          gpaType: 'gpa',
-        ),
+      // Calculate overall CGPA using GPASystem
+      double courseGPA = GPASystem.calculateCGPA(
+        semesterGPAs: semesterGPAs,
+        semesterCredits: semesterGpaCredits,
       );
 
-      if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
-        failedModules.add({
-          'moduleId': module.moduleId,
-          'moduleName': module.moduleName,
-          'semester': module.semester,
-          'grade': result.grade,
-          'type': module.isGpaModule ? 'GPA' : 'Non-GPA',
-          'credits': module.credits,
-        });
+      // Check if all Non-GPA modules are passed
+      bool allNonGpaPassed = true;
+      for (var semester in semesterNonGpaModules.keys) {
+        if (semesterPassedNonGpa[semester] != semesterTotalNonGpa[semester]) {
+          allNonGpaPassed = false;
+          break;
+        }
       }
 
-      if (['I', 'I(ET)', 'I(CA)'].contains(result.grade)) {
-        incompleteModules.add({
-          'moduleId': module.moduleId,
-          'moduleName': module.moduleName,
-          'semester': module.semester,
-          'grade': result.grade,
-          'type': module.isGpaModule ? 'GPA' : 'Non-GPA',
-          'credits': module.credits,
-        });
+      // Check degree eligibility using GPASystem
+      bool isEligible = GPASystem.isDegreeEligible(
+        cgpa: courseGPA,
+        semesterPassedNonGpa: semesterPassedNonGpa,
+        semesterTotalNonGpa: semesterTotalNonGpa,
+      );
+
+      // Get degree status message using GPASystem
+      String degreeStatus = GPASystem.getDegreeStatus(
+        cgpa: courseGPA,
+        allNonGpaPassed: allNonGpaPassed,
+      );
+
+      // Calculate insights count for notification badge
+      int insightsCount = 0;
+      for (var result in results) {
+        if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
+          insightsCount++;
+        }
+        if (['I', 'I(ET)', 'I(CA)'].contains(result.grade)) {
+          insightsCount++;
+        }
       }
+      if (courseGPA < 2.0)
+        insightsCount++;
+      else if (courseGPA < 2.5)
+        insightsCount++;
+
+      for (var semester in semesterGPAs.keys) {
+        if (semesterGPAs[semester]! < 2.0) insightsCount++;
+      }
+
+      for (var semester in semesterNonGpaModules.keys) {
+        int passed = semesterPassedNonGpa[semester] ?? 0;
+        int total = semesterTotalNonGpa[semester] ?? 0;
+        if (passed < total) insightsCount++;
+      }
+      if (!isEligible) insightsCount++;
+      if (insightsCount == 0) insightsCount = 1;
+
+      // Collect failed and incomplete modules
+      List<Map<String, dynamic>> failedModules = [];
+      List<Map<String, dynamic>> incompleteModules = [];
+
+      for (var result in results) {
+        var module = modules.firstWhere(
+          (m) => m.moduleId == result.moduleId,
+          orElse: () => Module(
+            moduleId: result.moduleId,
+            moduleName: '',
+            credits: 0,
+            courseIds: [],
+            semester: 0,
+            gpaType: 'gpa',
+          ),
+        );
+
+        if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
+          failedModules.add({
+            'moduleId': module.moduleId,
+            'moduleName': module.moduleName,
+            'semester': module.semester,
+            'grade': result.grade,
+            'type': module.isGpaModule ? 'GPA' : 'Non-GPA',
+            'credits': module.credits,
+          });
+        }
+
+        if (['I', 'I(ET)', 'I(CA)'].contains(result.grade)) {
+          incompleteModules.add({
+            'moduleId': module.moduleId,
+            'moduleName': module.moduleName,
+            'semester': module.semester,
+            'grade': result.grade,
+            'type': module.isGpaModule ? 'GPA' : 'Non-GPA',
+            'credits': module.credits,
+          });
+        }
+      }
+
+      Set<int> allSemesters = {};
+      allSemesters.addAll(semesterGpaModules.keys);
+      allSemesters.addAll(semesterNonGpaModules.keys);
+
+      setState(() {
+        _numModules = modules.length;
+        _numGpaModules = gpaModules.length;
+        _numNonGpaModules = nonGpaModules.length;
+        _numSemesters = allSemesters.length;
+        _semesterGPAs = semesterGPAs;
+        _semesterGpaCredits = semesterGpaCredits;
+        _semesterPassedNonGpaModules = semesterPassedNonGpa;
+        _semesterTotalNonGpaModules = semesterTotalNonGpa;
+        _courseGPA = courseGPA;
+        _insightsCount = insightsCount;
+        _isDegreeEligible = isEligible;
+        _degreeStatus = degreeStatus;
+        _failedModules = failedModules;
+        _incompleteModules = incompleteModules;
+        _isLoading = false;
+      });
+
+      _animationController.forward();
+    } catch (e) {
+      print('Error loading dashboard data: $e');
+      setState(() => _isLoading = false);
     }
-
-    Set<int> allSemesters = {};
-    allSemesters.addAll(semesterGpaModules.keys);
-    allSemesters.addAll(semesterNonGpaModules.keys);
-
-    setState(() {
-      _numModules = modules.length;
-      _numGpaModules = gpaModules.length;
-      _numNonGpaModules = nonGpaModules.length;
-      _numSemesters = allSemesters.length;
-      _semesterGPAs = semesterGPAs;
-      _semesterGpaCredits = semesterGpaCredits;
-      _semesterPassedNonGpaModules = semesterPassedNonGpa;
-      _semesterTotalNonGpaModules = semesterTotalNonGpa;
-      _courseGPA = courseGPA;
-      _insightsCount = insightsCount;
-      _isDegreeEligible = isEligible;
-      _degreeStatus = degreeStatus;
-      _failedModules = failedModules;
-      _incompleteModules = incompleteModules;
-      _isLoading = false;
-    });
-
-    _animationController.forward();
-  }
-
-  bool _isNonGpaPassed(String grade) {
-    if (grade == 'N/A') return false;
-    return ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade);
   }
 
   Color _getGpaColor(double gpa) {
@@ -282,18 +273,11 @@ class _DashboardPageState extends State<DashboardPage>
     return AppColors.error;
   }
 
-  String _getGpaLabel(double gpa) {
-    if (gpa >= 3.7) return 'Excellent';
-    if (gpa >= 3.0) return 'Very Good';
-    if (gpa >= 2.0) return 'Good';
-    return 'Needs Improvement';
-  }
-
   void _openSettings() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => SettingsPage(studentId: widget.studentId),
+        builder: (context) => SettingsScreen(studentId: widget.studentId),
       ),
     );
   }
@@ -556,7 +540,7 @@ class _DashboardPageState extends State<DashboardPage>
                                       const SizedBox(height: 8),
                                       _buildGpaInfoRow(
                                         'Status',
-                                        _getGpaLabel(_courseGPA),
+                                        GPASystem.getGpaLabel(_courseGPA),
                                         _getGpaColor(_courseGPA),
                                         isDark,
                                       ),

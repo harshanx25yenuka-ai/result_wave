@@ -6,18 +6,17 @@ import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:intl/intl.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsScreen extends StatefulWidget {
   final String studentId;
 
-  const SettingsPage({Key? key, required this.studentId}) : super(key: key);
+  const SettingsScreen({Key? key, required this.studentId}) : super(key: key);
 
   @override
-  _SettingsPageState createState() => _SettingsPageState();
+  _SettingsScreenState createState() => _SettingsScreenState();
 }
 
-class _SettingsPageState extends State<SettingsPage>
+class _SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   bool _isExporting = false;
   late AnimationController _animationController;
@@ -104,7 +103,19 @@ class _SettingsPageState extends State<SettingsPage>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('Settings'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: isDark
+                ? AppGradients.darkBackgroundGradient
+                : AppGradients.backgroundGradient,
+          ),
+        ),
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: isDark
@@ -117,7 +128,11 @@ class _SettingsPageState extends State<SettingsPage>
             // Appearance Section
             FadeInAnimation(
               delay: 100,
-              child: _buildSectionHeader('Appearance', Icons.palette_outlined),
+              child: _buildSectionHeader(
+                'Appearance',
+                Icons.palette_outlined,
+                isDark,
+              ),
             ),
             const SizedBox(height: 8),
             FadeInAnimation(
@@ -147,9 +162,10 @@ class _SettingsPageState extends State<SettingsPage>
                           themeProvider.themeMode == ThemeMode.dark
                               ? 'Dark Mode'
                               : 'Light Mode',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.white : Colors.black87,
                           ),
                         ),
                       ],
@@ -170,7 +186,11 @@ class _SettingsPageState extends State<SettingsPage>
             // Export Section
             FadeInAnimation(
               delay: 200,
-              child: _buildSectionHeader('Export', Icons.download_outlined),
+              child: _buildSectionHeader(
+                'Export',
+                Icons.download_outlined,
+                isDark,
+              ),
             ),
             const SizedBox(height: 8),
             FadeInAnimation(
@@ -192,7 +212,7 @@ class _SettingsPageState extends State<SettingsPage>
             // About Section
             FadeInAnimation(
               delay: 300,
-              child: _buildSectionHeader('About', Icons.info_outline),
+              child: _buildSectionHeader('About', Icons.info_outline, isDark),
             ),
             const SizedBox(height: 8),
             FadeInAnimation(
@@ -285,7 +305,7 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, IconData icon, bool isDark) {
     return Row(
       children: [
         Container(
@@ -299,10 +319,10 @@ class _SettingsPageState extends State<SettingsPage>
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Colors.grey,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             letterSpacing: 0.5,
           ),
         ),
@@ -328,7 +348,13 @@ class _SettingsPageState extends State<SettingsPage>
         ),
         child: Icon(icon, color: color, size: 22),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
       subtitle: Text(
         subtitle,
         style: TextStyle(
@@ -369,7 +395,7 @@ class _SettingsPageState extends State<SettingsPage>
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white : null,
+              color: isDark ? Colors.white : Colors.black87,
             ),
           ),
         ],
