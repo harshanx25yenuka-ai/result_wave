@@ -62,6 +62,13 @@ class _AboutScreenState extends State<AboutScreen>
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: isDark
+                ? AppGradients.darkBackgroundGradient
+                : AppGradients.backgroundGradient,
+          ),
+        ),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -166,6 +173,7 @@ class _AboutScreenState extends State<AboutScreen>
                             _buildSectionHeader(
                               'About the App',
                               Icons.info_outline,
+                              isDark,
                             ),
                             const SizedBox(height: 12),
                             Text(
@@ -194,6 +202,7 @@ class _AboutScreenState extends State<AboutScreen>
                             _buildSectionHeader(
                               'Key Features',
                               Icons.star_outline,
+                              isDark,
                             ),
                             const SizedBox(height: 12),
                             ..._aboutInfo!.keyFeatures.map(
@@ -236,7 +245,11 @@ class _AboutScreenState extends State<AboutScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionHeader('Developer', Icons.code),
+                            _buildSectionHeader(
+                              'Developer',
+                              Icons.code,
+                              isDark,
+                            ),
                             const SizedBox(height: 12),
                             _buildInfoRow(
                               'Developed by',
@@ -274,6 +287,7 @@ class _AboutScreenState extends State<AboutScreen>
                             _buildSectionHeader(
                               'Support & Contact',
                               Icons.support_agent,
+                              isDark,
                             ),
                             const SizedBox(height: 12),
                             _buildContactRow(
@@ -307,7 +321,7 @@ class _AboutScreenState extends State<AboutScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionHeader('Legal', Icons.gavel),
+                            _buildSectionHeader('Legal', Icons.gavel, isDark),
                             const SizedBox(height: 12),
                             _buildExpandableSection(
                               'Privacy Policy',
@@ -339,7 +353,11 @@ class _AboutScreenState extends State<AboutScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionHeader('Security', Icons.security),
+                            _buildSectionHeader(
+                              'Security',
+                              Icons.security,
+                              isDark,
+                            ),
                             const SizedBox(height: 12),
                             Text(
                               _aboutInfo!.securityStatement,
@@ -367,6 +385,7 @@ class _AboutScreenState extends State<AboutScreen>
                             _buildSectionHeader(
                               'Version History',
                               Icons.history,
+                              isDark,
                             ),
                             const SizedBox(height: 12),
                             ..._aboutInfo!.changelog.map(
@@ -460,7 +479,11 @@ class _AboutScreenState extends State<AboutScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionHeader('Connect With Us', Icons.share),
+                            _buildSectionHeader(
+                              'Connect With Us',
+                              Icons.share,
+                              isDark,
+                            ),
                             const SizedBox(height: 12),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -521,7 +544,7 @@ class _AboutScreenState extends State<AboutScreen>
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, IconData icon, bool isDark) {
     return Row(
       children: [
         Container(
@@ -535,7 +558,11 @@ class _AboutScreenState extends State<AboutScreen>
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
         ),
       ],
     );
@@ -610,28 +637,31 @@ class _AboutScreenState extends State<AboutScreen>
   }
 
   Widget _buildExpandableSection(String title, String content, bool isDark) {
-    return ExpansionTile(
-      title: Text(
-        title,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: isDark ? Colors.white : Colors.black87,
-        ),
-      ),
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            content,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.5,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
           ),
         ),
-      ],
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              content,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

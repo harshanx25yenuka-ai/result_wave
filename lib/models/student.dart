@@ -2,11 +2,13 @@ class Student {
   final String studentId;
   final String studentName;
   final String courseId;
+  final String password; // Added password field
 
   Student({
     required this.studentId,
     required this.studentName,
     required this.courseId,
+    required this.password,
   });
 
   Map<String, dynamic> toMap() {
@@ -14,6 +16,7 @@ class Student {
       'studentId': studentId,
       'studentName': studentName,
       'courseId': courseId,
+      'password': password,
     };
   }
 
@@ -85,6 +88,29 @@ class Student {
       return 'Student number must be 2 digits (e.g., 01, 02, 11)';
     }
 
+    return null;
+  }
+
+  static bool validatePassword(String password) {
+    if (password.length < 8) return false;
+    if (!password.contains(RegExp(r'[A-Z]'))) return false;
+    if (!password.contains(RegExp(r'[a-z]'))) return false;
+    if (!password.contains(RegExp(r'[0-9]'))) return false;
+    if (!password.contains(RegExp(r'[#\$%@_]'))) return false;
+    return true;
+  }
+
+  static String? getPasswordError(String password) {
+    if (password.isEmpty) return 'Please enter a password';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    if (!password.contains(RegExp(r'[A-Z]')))
+      return 'Password must contain at least one capital letter';
+    if (!password.contains(RegExp(r'[a-z]')))
+      return 'Password must contain at least one simple letter';
+    if (!password.contains(RegExp(r'[0-9]')))
+      return 'Password must contain at least one number';
+    if (!password.contains(RegExp(r'[#\$%@_]')))
+      return 'Password must contain at least one special character (#, \$, _, @)';
     return null;
   }
 

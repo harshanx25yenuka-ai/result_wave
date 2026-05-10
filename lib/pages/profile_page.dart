@@ -74,6 +74,14 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
+  String _generateEmail() {
+    final studentId = _student?.studentId ?? '';
+    // Remove slashes and convert to lowercase
+    // Example: SOF/21/B1/11 -> sof21b111
+    final cleanId = studentId.replaceAll('/', '').toLowerCase();
+    return '$cleanId@uovt.ac.lk';
+  }
+
   Future<void> _updateAvatar(int? avatarId) async {
     setState(() => _isUpdatingAvatar = true);
 
@@ -382,8 +390,7 @@ class _ProfilePageState extends State<ProfilePage>
                             _buildInfoTile(
                               icon: Icons.email_outlined,
                               label: 'Email',
-                              value:
-                                  '${_student?.studentId?.toLowerCase()}@example.com',
+                              value: _generateEmail(),
                               color: AppColors.info,
                               isDark: isDark,
                             ),

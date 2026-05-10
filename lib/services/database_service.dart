@@ -22,13 +22,14 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'result_wave.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3, // Increased version for schema change
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE students (
             studentId TEXT PRIMARY KEY,
             studentName TEXT,
-            courseId TEXT
+            courseId TEXT,
+            password TEXT
           )
         ''');
         await db.execute('''
@@ -67,6 +68,13 @@ class DatabaseService {
           try {
             await db.execute(
               'ALTER TABLE modules ADD COLUMN gpaType TEXT DEFAULT "gpa"',
+            );
+          } catch (e) {}
+        }
+        if (oldVersion < 3) {
+          try {
+            await db.execute(
+              'ALTER TABLE students ADD COLUMN password TEXT DEFAULT ""',
             );
           } catch (e) {}
         }
@@ -138,8 +146,38 @@ class DatabaseService {
         studentId: maps[i]['studentId'],
         studentName: maps[i]['studentName'],
         courseId: maps[i]['courseId'],
+        password: maps[i]['password'] ?? '',
       );
     });
+  }
+
+  Future<Student?> getStudentById(String studentId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'students',
+      where: 'studentId = ?',
+      whereArgs: [studentId],
+    );
+    if (maps.isEmpty) return null;
+    return Student(
+      studentId: maps[0]['studentId'],
+      studentName: maps[0]['studentName'],
+      courseId: maps[0]['courseId'],
+      password: maps[0]['password'] ?? '',
+    );
+  }
+
+  Future<bool> validateStudentCredentials(
+    String studentId,
+    String password,
+  ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'students',
+      where: 'studentId = ? AND password = ?',
+      whereArgs: [studentId, password],
+    );
+    return maps.isNotEmpty;
   }
 
   Future<List<Course>> getCourses() async {
