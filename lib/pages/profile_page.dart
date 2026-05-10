@@ -4,6 +4,8 @@ import 'package:result_wave/models/avatar.dart';
 import 'package:result_wave/models/course.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/avatar_cache_service.dart';
+import 'package:result_wave/services/auth_service.dart';
+import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -26,6 +28,7 @@ class _ProfilePageState extends State<ProfilePage>
   int? _selectedAvatarId;
   bool _isLoading = true;
   bool _isUpdatingAvatar = false;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -74,14 +77,6 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
-  String _generateEmail() {
-    final studentId = _student?.studentId ?? '';
-    // Remove slashes and convert to lowercase
-    // Example: SOF/21/B1/11 -> sof21b111
-    final cleanId = studentId.replaceAll('/', '').toLowerCase();
-    return '$cleanId@uovt.ac.lk';
-  }
-
   Future<void> _updateAvatar(int? avatarId) async {
     setState(() => _isUpdatingAvatar = true);
 
@@ -107,52 +102,94 @@ class _ProfilePageState extends State<ProfilePage>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateModal) {
-          return Container(
-            padding: const EdgeInsets.all(20),
-            height: MediaQuery.of(context).size.height * 0.5,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateModal) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Choose Avatar',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Select a profile picture for your account',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 20),
-                Expanded(
-                  child: GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 1,
-                        ),
-                    itemCount: _avatars.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        final isSelected = _selectedAvatarId == null;
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Choose Avatar',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Select a profile picture for your account',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: GridView.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 1,
+                          ),
+                      itemCount: _avatars.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          final isSelected = _selectedAvatarId == null;
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              _updateAvatar(null);
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.primaryBlue
+                                      : Colors.grey.shade300,
+                                  width: 3,
+                                ),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: AppColors.primaryBlue
+                                              .withOpacity(0.3),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: ClipOval(
+                                child: Container(
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(
+                                    Icons.person,
+                                    size: 40,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
+                        final avatar = _avatars[index - 1];
+                        final isSelected = _selectedAvatarId == avatar.id;
                         return GestureDetector(
                           onTap: () {
-                            _updateAvatar(null);
                             Navigator.pop(context);
+                            _updateAvatar(avatar.id);
                           },
                           child: Container(
                             decoration: BoxDecoration(
@@ -160,7 +197,7 @@ class _ProfilePageState extends State<ProfilePage>
                               border: Border.all(
                                 color: isSelected
                                     ? AppColors.primaryBlue
-                                    : Colors.grey.shade300,
+                                    : Colors.transparent,
                                 width: 3,
                               ),
                               boxShadow: isSelected
@@ -175,76 +212,72 @@ class _ProfilePageState extends State<ProfilePage>
                                   : null,
                             ),
                             child: ClipOval(
-                              child: Container(
-                                color: Colors.grey.shade200,
-                                child: const Icon(
-                                  Icons.person,
-                                  size: 40,
-                                  color: Colors.grey,
-                                ),
+                              child: Image.asset(
+                                avatar.avatarPath,
+                                width: 60,
+                                height: 60,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey.shade300,
+                                    child: const Icon(
+                                      Icons.person,
+                                      size: 30,
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
                         );
-                      }
-
-                      final avatar = _avatars[index - 1];
-                      final isSelected = _selectedAvatarId == avatar.id;
-                      return GestureDetector(
-                        onTap: () {
-                          _updateAvatar(avatar.id);
-                          Navigator.pop(context);
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primaryBlue
-                                  : Colors.transparent,
-                              width: 3,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: AppColors.primaryBlue.withOpacity(
-                                        0.3,
-                                      ),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              avatar.avatarPath,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey.shade300,
-                                  child: const Icon(
-                                    Icons.person,
-                                    size: 30,
-                                    color: Colors.white,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-          );
-        },
+            child: const Text('Logout'),
+          ),
+        ],
       ),
     );
+
+    if (confirm == true) {
+      await _authService.logout();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
+      }
+    }
   }
 
   void _showMessage(String message, {required bool isError}) {
@@ -275,6 +308,13 @@ class _ProfilePageState extends State<ProfilePage>
           centerTitle: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: _logout,
+              tooltip: 'Logout',
+            ),
+          ],
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -559,6 +599,12 @@ class _ProfilePageState extends State<ProfilePage>
         ],
       ),
     );
+  }
+
+  String _generateEmail() {
+    final studentId = _student?.studentId ?? '';
+    final cleanId = studentId.replaceAll('/', '').toLowerCase();
+    return '$cleanId@uovt.ac.lk';
   }
 
   String _getEnrolledYear() {

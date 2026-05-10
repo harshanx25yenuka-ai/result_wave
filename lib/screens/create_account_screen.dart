@@ -120,6 +120,46 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     setState(() {});
   }
 
+  bool _isValidStudentName(String name) {
+    // Allow letters, spaces, dots, and hyphens only
+    // Valid formats: W. Y. Harshan, Yenuka.Harshan, Yenuka Harshan
+    final regex = RegExp(r'^[A-Za-z\s\.\-]+$');
+    if (!regex.hasMatch(name)) return false;
+
+    // Must contain at least one letter
+    if (!name.contains(RegExp(r'[A-Za-z]'))) return false;
+
+    // Cannot contain numbers
+    if (name.contains(RegExp(r'[0-9]'))) return false;
+
+    // Cannot contain special characters except . - and space
+    if (name.contains(RegExp(r'[^A-Za-z\s\.\-]'))) return false;
+
+    return true;
+  }
+
+  String? _validateStudentName(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Enter Student Name';
+    }
+
+    final trimmedName = value.trim();
+
+    if (trimmedName.length < 6) {
+      return 'Name must be at least 6 characters';
+    }
+
+    if (trimmedName.length > 18) {
+      return 'Name must be less than 18 characters';
+    }
+
+    if (!_isValidStudentName(trimmedName)) {
+      return 'Use letters, spaces, dots(.), or hyphens(-) only.\nExample: W. Y. Harshan, Yenuka.Harshan, Yenuka Harshan';
+    }
+
+    return null;
+  }
+
   Future<void> _loadData() async {
     try {
       await DatabaseService().loadJsonData();
@@ -145,6 +185,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     final idError = Student.validateStudentId(studentId);
     if (idError != null) {
       _showMessage(idError, isError: true);
+      return;
+    }
+
+    final nameError = _validateStudentName(studentName);
+    if (nameError != null) {
+      _showMessage(nameError, isError: true);
       return;
     }
 
@@ -182,7 +228,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       });
 
       try {
-        // Register using AuthService
         final registered = await _authService.registerStudent(
           studentId: studentId,
           studentName: studentName,
@@ -200,7 +245,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           await AvatarCacheService.saveAvatar(studentId, _selectedAvatarId);
         }
 
-        // Create default results for modules
         List<Module> modules = await DatabaseService().getModulesByCourse(
           _selectedCourseId!,
         );
@@ -424,28 +468,23 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                         'Please enter Student Name',
                                                         isError: true,
                                                       );
-                                                    } else if (_studentNameController
-                                                            .text
-                                                            .trim()
-                                                            .length <
-                                                        6) {
-                                                      _showMessage(
-                                                        'Student Name must be at least 6 characters',
-                                                        isError: true,
-                                                      );
-                                                    } else if (_studentNameController
-                                                            .text
-                                                            .trim()
-                                                            .length >
-                                                        18) {
-                                                      _showMessage(
-                                                        'Student Name must be less than 18 characters',
-                                                        isError: true,
-                                                      );
                                                     } else {
-                                                      setState(
-                                                        () => _currentStep++,
-                                                      );
+                                                      final nameError =
+                                                          _validateStudentName(
+                                                            _studentNameController
+                                                                .text
+                                                                .trim(),
+                                                          );
+                                                      if (nameError != null) {
+                                                        _showMessage(
+                                                          nameError,
+                                                          isError: true,
+                                                        );
+                                                      } else {
+                                                        setState(
+                                                          () => _currentStep++,
+                                                        );
+                                                      }
                                                     }
                                                   } else if (_currentStep ==
                                                       2) {
@@ -710,7 +749,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           controller: _studentNameController,
           decoration: InputDecoration(
             labelText: 'Student Name',
-            hintText: 'Minimum 6, Maximum 18 characters',
+            hintText: 'Examples: W. Y. Harshan, Yenuka.Harshan, Yenuka Harshan',
+            helperText: 'Use letters, spaces, dots(.), or hyphens(-) only',
             prefixIcon: Icon(Icons.person, color: AppColors.primaryBlue),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -719,18 +759,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             filled: true,
             fillColor: isDark ? AppColors.surfaceDark : Colors.grey.shade50,
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Enter Student Name';
-            }
-            if (value.trim().length < 6) {
-              return 'Name must be at least 6 characters';
-            }
-            if (value.trim().length > 18) {
-              return 'Name must be less than 18 characters';
-            }
-            return null;
-          },
+          validator: _validateStudentName,
         ),
       ],
     );
