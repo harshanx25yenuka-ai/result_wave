@@ -78,14 +78,19 @@ class SupabaseService {
         },
       );
 
-      if (response != null) {
+      print('Create user response: $response');
+
+      if (response != null && response['success'] == true) {
         return {
-          'success': response['success'] ?? false,
+          'success': true,
           'message': response['message'],
           'user': response['user'],
         };
       } else {
-        return {'success': false, 'error': 'Failed to create user'};
+        return {
+          'success': false,
+          'error': response?['error'] ?? 'Failed to create user',
+        };
       }
     } catch (e) {
       print('Create user error: $e');
@@ -102,6 +107,8 @@ class SupabaseService {
         'verify_user_password_simple',
         params: {'p_student_id': studentId, 'p_password': password},
       );
+
+      print('Login response: $response');
 
       if (response != null && response['success'] == true) {
         await setRLSContext(studentId);
@@ -139,8 +146,17 @@ class SupabaseService {
 
   Future<Map<String, dynamic>> getUserAvatar(String studentId) async {
     try {
-      // Set RLS context first
-      await setRLSContext(studentId);
+      // First check if user exists
+      final userExists = await this.userExists(studentId);
+
+      if (!userExists) {
+        print('User does not exist in Supabase: $studentId');
+        return {
+          'success': false,
+          'avatarId': null,
+          'error': 'User not found in Supabase',
+        };
+      }
 
       // Query the user table directly
       final response = await client
@@ -155,14 +171,13 @@ class SupabaseService {
         final avatarId = response['avatar_id'];
         print('Avatar ID found: $avatarId');
         return {'success': true, 'avatarId': avatarId};
+      } else {
+        print('No user found for studentId: $studentId');
+        return {'success': false, 'avatarId': null, 'error': 'User not found'};
       }
-      print('No user found for studentId: $studentId');
-      return {'success': false, 'avatarId': null};
     } catch (e) {
       print('Get user avatar error: $e');
       return {'success': false, 'avatarId': null, 'error': e.toString()};
-    } finally {
-      await clearRLSContext();
     }
   }
 
@@ -201,7 +216,7 @@ class SupabaseService {
   }
 
   // =============================================
-  // BACKUP METHODS - Using RPC to bypass RLS
+  // BACKUP METHODS
   // =============================================
 
   Future<Map<String, dynamic>> createBackup({
@@ -224,9 +239,11 @@ class SupabaseService {
         },
       );
 
-      if (response != null) {
+      print('Create backup response: $response');
+
+      if (response != null && response['success'] == true) {
         return {
-          'success': response['success'] ?? false,
+          'success': true,
           'message': response['message'],
           'backupId': response['backup_id'],
           'isUpdate': response['is_update'] ?? false,
@@ -234,7 +251,10 @@ class SupabaseService {
           'backupSize': backupSize,
         };
       } else {
-        return {'success': false, 'error': 'Failed to create backup'};
+        return {
+          'success': false,
+          'error': response?['message'] ?? 'Failed to create backup',
+        };
       }
     } catch (e) {
       print('Create backup error: $e');
@@ -249,13 +269,26 @@ class SupabaseService {
           'get_student_backup_history',
           params: {'p_student_id': studentId},
         );
-        return response ?? [];
+
+        if (response == null) {
+          return [];
+        }
+
+        if (response is List) {
+          return List<Map<String, dynamic>>.from(response);
+        }
+
+        if (response is Map && response.containsKey('data')) {
+          return List<Map<String, dynamic>>.from(response['data']);
+        }
+
+        return [];
       } else {
         final response = await client
             .from(SupabaseConfig.backupsTable)
             .select()
             .order('backup_date', ascending: false);
-        return response;
+        return List<Map<String, dynamic>>.from(response);
       }
     } catch (e) {
       print('Get backups error: $e');
@@ -270,8 +303,15 @@ class SupabaseService {
         params: {'p_student_id': studentId},
       );
 
-      if (response != null && response.isNotEmpty) {
-        return response[0];
+      print('Get latest backup response: $response');
+
+      if (response != null) {
+        if (response is List && response.isNotEmpty) {
+          return response[0];
+        }
+        if (response is Map && response.containsKey('id')) {
+          return Map<String, dynamic>.from(response);
+        }
       }
       return {};
     } catch (e) {
@@ -303,7 +343,7 @@ class SupabaseService {
   Future<bool> restoreLatestBackup(String studentId, Database localDb) async {
     try {
       final latestBackup = await getLatestBackup(studentId);
-      if (latestBackup.isNotEmpty) {
+      if (latestBackup.isNotEmpty && latestBackup.containsKey('id')) {
         return await restoreBackup(latestBackup['id'], localDb);
       }
       return false;
@@ -320,8 +360,8 @@ class SupabaseService {
         params: {'p_backup_id': backupId},
       );
 
-      if (response != null) {
-        return response['success'] == true;
+      if (response != null && response['success'] == true) {
+        return true;
       }
       return false;
     } catch (e) {

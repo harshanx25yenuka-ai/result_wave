@@ -181,45 +181,49 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       });
 
       try {
+        // First, check if user exists in Supabase
         final userExists = await _supabaseService.userExists(studentId);
-        if (userExists) {
-          _showMessage(
-            'User already exists with this Student ID',
-            isError: true,
-          );
-          setState(() => _isCreating = false);
-          return;
-        }
 
-        final result = await _supabaseService.createUser(
-          studentId: studentId,
-          studentName: studentName,
-          courseId: _selectedCourseId!,
-          password: password,
-          avatarId: _selectedAvatarId,
-        );
-
-        if (!result['success']) {
-          _showMessage(result['error'], isError: true);
-          setState(() => _isCreating = false);
-          return;
-        }
-
-        await DatabaseService().insertStudent(
-          Student(
+        if (!userExists) {
+          // Create user in Supabase
+          final result = await _supabaseService.createUser(
             studentId: studentId,
             studentName: studentName,
             courseId: _selectedCourseId!,
-          ),
-        );
+            password: password,
+            avatarId: _selectedAvatarId,
+          );
 
+          if (!result['success']) {
+            _showMessage(result['error'], isError: true);
+            setState(() => _isCreating = false);
+            return;
+          }
+        }
+
+        // Create local student record
+        final existingLocalStudent = await DatabaseService().getStudents();
+        if (!existingLocalStudent.any((s) => s.studentId == studentId)) {
+          await DatabaseService().insertStudent(
+            Student(
+              studentId: studentId,
+              studentName: studentName,
+              courseId: _selectedCourseId!,
+            ),
+          );
+        }
+
+        // Create default results for modules
         List<Module> modules = await DatabaseService().getModulesByCourse(
           _selectedCourseId!,
         );
         for (var module in modules) {
-          await DatabaseService().insertResult(
-            Result(moduleId: module.moduleId, grade: 'N/A'),
-          );
+          final existingResults = await DatabaseService().getResults();
+          if (!existingResults.any((r) => r.moduleId == module.moduleId)) {
+            await DatabaseService().insertResult(
+              Result(moduleId: module.moduleId, grade: 'N/A'),
+            );
+          }
         }
 
         _showMessage('Account created successfully!', isError: false);

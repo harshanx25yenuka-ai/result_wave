@@ -65,10 +65,10 @@ class _SettingsPageState extends State<SettingsPage>
     try {
       await _supabaseService.initSupabase();
     } catch (e) {
-      // Supabase might not be initialized yet
+      print('Supabase init error: $e');
     }
 
-    // Load all data in parallel for faster loading
+    // Load all data in parallel
     await Future.wait([
       _loadData(),
       _loadAvatars(),
@@ -83,23 +83,31 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Future<void> _loadData() async {
-    final students = await DatabaseService().getStudents();
-    _student = students.firstWhere((s) => s.studentId == widget.studentId);
+    try {
+      final students = await DatabaseService().getStudents();
+      _student = students.firstWhere((s) => s.studentId == widget.studentId);
 
-    final modules = await DatabaseService().getModulesByCourse(
-      _student!.courseId,
-    );
-    _semesters = modules.map((m) => m.semester).toSet().toList()..sort();
+      final modules = await DatabaseService().getModulesByCourse(
+        _student!.courseId,
+      );
+      _semesters = modules.map((m) => m.semester).toSet().toList()..sort();
 
-    final courses = await DatabaseService().getCourses();
-    final course = courses.firstWhere((c) => c.courseId == _student!.courseId);
-    _courseName = course.courseName;
+      final courses = await DatabaseService().getCourses();
+      final course = courses.firstWhere(
+        (c) => c.courseId == _student!.courseId,
+      );
+      _courseName = course.courseName;
+    } catch (e) {
+      print('Load data error: $e');
+    }
   }
 
   Future<void> _loadAvatars() async {
     try {
       final avatars = await DatabaseService().getAvatars();
-      _avatars = avatars;
+      setState(() {
+        _avatars = avatars;
+      });
     } catch (e) {
       print('Error loading avatars: $e');
     }
@@ -108,11 +116,24 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _loadUserAvatar() async {
     try {
       final result = await _supabaseService.getUserAvatar(widget.studentId);
+      print('Load user avatar result: $result');
+
       if (result['success'] && result['avatarId'] != null) {
-        _selectedAvatarId = result['avatarId'];
+        setState(() {
+          _selectedAvatarId = result['avatarId'];
+        });
+        print('Avatar loaded: $_selectedAvatarId');
+      } else {
+        print('No avatar found: ${result['error']}');
+        setState(() {
+          _selectedAvatarId = null;
+        });
       }
     } catch (e) {
       print('Error loading user avatar: $e');
+      setState(() {
+        _selectedAvatarId = null;
+      });
     }
   }
 
@@ -122,8 +143,11 @@ class _SettingsPageState extends State<SettingsPage>
       _backupHistory = await _supabaseService.getBackups(
         studentId: widget.studentId,
       );
+      print('Backup history count: ${_backupHistory.length}');
     } catch (e) {
       print('Load backup info error: $e');
+      _backupHistory = [];
+      _latestBackup = null;
     }
   }
 
