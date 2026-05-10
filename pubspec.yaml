@@ -18,9 +18,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_fonts: ^8.0.2
   share_plus: ^13.1.0
-  supabase_flutter: ^2.0.0  # Add this
+  # supabase_flutter: ^2.0.0  # Add this
   intl: ^0.18.1  # Add this for date formatting
-  package_info_plus: ^10.1.0
+  # package_info_plus: ^10.1.0
 
 dev_dependencies:
   flutter_test:

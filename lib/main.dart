@@ -3,33 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:result_wave/providers/theme_provider.dart';
 import 'package:result_wave/screens/splash_screen.dart';
 import 'package:result_wave/services/database_service.dart';
-import 'package:result_wave/services/supabase_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize local database
   await DatabaseService().initializeDatabase();
-
-  // Initialize Supabase (cloud backup service)
-  try {
-    await SupabaseService().initSupabase();
-    print('Supabase initialized successfully');
-
-    // Test connection
-    final isConnected = await SupabaseService().testConnection();
-    if (isConnected) {
-      print('Supabase connection successful');
-    } else {
-      print('Supabase connection failed - running in offline mode');
-    }
-  } catch (e) {
-    print('Supabase initialization error: $e');
-    print('App will continue working in offline mode');
-  }
-
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),

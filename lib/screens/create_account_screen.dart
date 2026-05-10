@@ -6,7 +6,7 @@ import 'package:result_wave/models/result.dart';
 import 'package:result_wave/models/avatar.dart';
 import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/services/database_service.dart';
-import 'package:result_wave/services/supabase_service.dart';
+import 'package:result_wave/services/avatar_cache_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -22,8 +22,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   final _formKey = GlobalKey<FormState>();
   final _studentIdController = TextEditingController();
   final _studentNameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
 
   String? _selectedCourseId;
   List<Course> _courses = [];
@@ -38,17 +36,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   bool _isIdValid = false;
   String _idError = '';
 
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
-
-  bool _hasCapital = false;
-  bool _hasLower = false;
-  bool _hasNumber = false;
-  bool _hasSpecial = false;
-  bool _hasMinLength = false;
-
-  final SupabaseService _supabaseService = SupabaseService();
-
   @override
   void initState() {
     super.initState();
@@ -59,7 +46,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     _loadData();
 
     _studentIdController.addListener(_validateAndDetectCourse);
-    _passwordController.addListener(_validatePassword);
   }
 
   @override
@@ -67,30 +53,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     _controller.dispose();
     _studentIdController.dispose();
     _studentNameController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
     _studentIdController.removeListener(_validateAndDetectCourse);
-    _passwordController.removeListener(_validatePassword);
     super.dispose();
-  }
-
-  void _validatePassword() {
-    final password = _passwordController.text;
-    setState(() {
-      _hasCapital = password.contains(RegExp(r'[A-Z]'));
-      _hasLower = password.contains(RegExp(r'[a-z]'));
-      _hasNumber = password.contains(RegExp(r'[0-9]'));
-      _hasSpecial = password.contains(RegExp(r'[#\$%@_]'));
-      _hasMinLength = password.length >= 8;
-    });
-  }
-
-  bool get _isPasswordValid {
-    return _hasCapital &&
-        _hasLower &&
-        _hasNumber &&
-        _hasSpecial &&
-        _hasMinLength;
   }
 
   void _validateAndDetectCourse() {
@@ -138,22 +102,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   Future<void> _createAccount() async {
     final studentId = _studentIdController.text.trim().toUpperCase();
     final studentName = _studentNameController.text.trim().toUpperCase();
-    final password = _passwordController.text;
-    final confirmPassword = _confirmPasswordController.text;
 
     final idError = Student.validateStudentId(studentId);
     if (idError != null) {
       _showMessage(idError, isError: true);
-      return;
-    }
-
-    if (!_isPasswordValid) {
-      _showMessage('Please meet all password requirements', isError: true);
-      return;
-    }
-
-    if (password != confirmPassword) {
-      _showMessage('Passwords do not match', isError: true);
       return;
     }
 
@@ -181,49 +133,36 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       });
 
       try {
-        // First, check if user exists in Supabase
-        final userExists = await _supabaseService.userExists(studentId);
+        // Check if student already exists in local database
+        final existingStudents = await DatabaseService().getStudents();
+        if (existingStudents.any((s) => s.studentId == studentId)) {
+          _showMessage('Student ID already exists', isError: true);
+          setState(() => _isCreating = false);
+          return;
+        }
 
-        if (!userExists) {
-          // Create user in Supabase
-          final result = await _supabaseService.createUser(
-            studentId: studentId,
-            studentName: studentName,
-            courseId: _selectedCourseId!,
-            password: password,
-            avatarId: _selectedAvatarId,
-          );
-
-          if (!result['success']) {
-            _showMessage(result['error'], isError: true);
-            setState(() => _isCreating = false);
-            return;
-          }
+        // Save avatar to cache if selected
+        if (_selectedAvatarId != null) {
+          await AvatarCacheService.saveAvatar(studentId, _selectedAvatarId);
         }
 
         // Create local student record
-        final existingLocalStudent = await DatabaseService().getStudents();
-        if (!existingLocalStudent.any((s) => s.studentId == studentId)) {
-          await DatabaseService().insertStudent(
-            Student(
-              studentId: studentId,
-              studentName: studentName,
-              courseId: _selectedCourseId!,
-            ),
-          );
-        }
+        await DatabaseService().insertStudent(
+          Student(
+            studentId: studentId,
+            studentName: studentName,
+            courseId: _selectedCourseId!,
+          ),
+        );
 
         // Create default results for modules
         List<Module> modules = await DatabaseService().getModulesByCourse(
           _selectedCourseId!,
         );
         for (var module in modules) {
-          final existingResults = await DatabaseService().getResults();
-          if (!existingResults.any((r) => r.moduleId == module.moduleId)) {
-            await DatabaseService().insertResult(
-              Result(moduleId: module.moduleId, grade: 'N/A'),
-            );
-          }
+          await DatabaseService().insertResult(
+            Result(moduleId: module.moduleId, grade: 'N/A'),
+          );
         }
 
         _showMessage('Account created successfully!', isError: false);
@@ -382,9 +321,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                 if (_currentStep == 0)
                                   _buildStudentInfoStep(isDark),
                                 if (_currentStep == 1) _buildAvatarStep(isDark),
-                                if (_currentStep == 2)
-                                  _buildPasswordStep(isDark),
-                                if (_currentStep == 3) _buildCourseInfo(isDark),
+                                if (_currentStep == 2) _buildCourseInfo(isDark),
                                 const SizedBox(height: 24),
                                 Row(
                                   children: [
@@ -413,7 +350,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                         onPressed: _isCreating
                                             ? null
                                             : () {
-                                                if (_currentStep == 3) {
+                                                if (_currentStep == 2) {
                                                   _createAccount();
                                                 } else {
                                                   if (_currentStep == 0) {
@@ -438,26 +375,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                         .isEmpty) {
                                                       _showMessage(
                                                         'Please enter Student Name',
-                                                        isError: true,
-                                                      );
-                                                    } else {
-                                                      setState(
-                                                        () => _currentStep++,
-                                                      );
-                                                    }
-                                                  } else if (_currentStep ==
-                                                      2) {
-                                                    if (!_isPasswordValid) {
-                                                      _showMessage(
-                                                        'Please meet all password requirements',
-                                                        isError: true,
-                                                      );
-                                                    } else if (_passwordController
-                                                            .text !=
-                                                        _confirmPasswordController
-                                                            .text) {
-                                                      _showMessage(
-                                                        'Passwords do not match',
                                                         isError: true,
                                                       );
                                                     } else {
@@ -497,7 +414,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                 ),
                                               )
                                             : Text(
-                                                _currentStep == 3
+                                                _currentStep == 2
                                                     ? 'Create Account'
                                                     : 'Next',
                                                 style: const TextStyle(
@@ -579,16 +496,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 : Colors.grey.shade300,
           ),
         ),
-        _buildStepCircle(2, 'Password'),
-        Expanded(
-          child: Container(
-            height: 2,
-            color: _currentStep >= 3
-                ? AppColors.primaryBlue
-                : Colors.grey.shade300,
-          ),
-        ),
-        _buildStepCircle(3, 'Verify'),
+        _buildStepCircle(2, 'Verify'),
       ],
     );
   }
@@ -836,7 +744,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'You can change your avatar later in Settings.',
+                  'You can change your avatar later in Profile Settings.',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -847,124 +755,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildPasswordStep(bool isDark) {
-    return Column(
-      children: [
-        TextFormField(
-          controller: _passwordController,
-          obscureText: _obscurePassword,
-          decoration: InputDecoration(
-            labelText: 'Password',
-            prefixIcon: Icon(Icons.lock, color: AppColors.primaryBlue),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                color: AppColors.primaryBlue,
-              ),
-              onPressed: () {
-                setState(() {
-                  _obscurePassword = !_obscurePassword;
-                });
-              },
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: isDark ? AppColors.surfaceDark : Colors.grey.shade50,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: (_isPasswordValid ? AppColors.success : AppColors.warning)
-                .withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: (_isPasswordValid ? AppColors.success : AppColors.warning)
-                  .withOpacity(0.3),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Password Requirements:',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _buildRequirementTile('At least 8 characters', _hasMinLength),
-              _buildRequirementTile('Capital letter (A-Z)', _hasCapital),
-              _buildRequirementTile('Simple letter (a-z)', _hasLower),
-              _buildRequirementTile('Number (0-9)', _hasNumber),
-              _buildRequirementTile(
-                'Special character (#, \$, _, @)',
-                _hasSpecial,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _confirmPasswordController,
-          obscureText: _obscureConfirmPassword,
-          decoration: InputDecoration(
-            labelText: 'Confirm Password',
-            prefixIcon: Icon(Icons.lock_outline, color: AppColors.primaryBlue),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscureConfirmPassword
-                    ? Icons.visibility_off
-                    : Icons.visibility,
-                color: AppColors.primaryBlue,
-              ),
-              onPressed: () {
-                setState(() {
-                  _obscureConfirmPassword = !_obscureConfirmPassword;
-                });
-              },
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: isDark ? AppColors.surfaceDark : Colors.grey.shade50,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRequirementTile(String text, bool isValid) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(
-            isValid ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 16,
-            color: isValid ? AppColors.success : AppColors.warning,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 11,
-              color: isValid ? AppColors.success : AppColors.warning,
-            ),
-          ),
-        ],
-      ),
     );
   }
 

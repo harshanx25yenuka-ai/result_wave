@@ -11,10 +11,8 @@ import 'package:result_wave/models/course.dart';
 import 'package:result_wave/services/database_service.dart';
 
 class PdfService {
-  // Premium Color Scheme
   static const PdfColor primaryColor = PdfColor.fromInt(0xFF1E40AF);
   static const PdfColor secondaryColor = PdfColor.fromInt(0xFF2563EB);
-  static const PdfColor accentColor = PdfColor.fromInt(0xFF3B82F6);
   static const PdfColor goldColor = PdfColor.fromInt(0xFFFFD700);
   static const PdfColor successColor = PdfColor.fromInt(0xFF10B981);
   static const PdfColor warningColor = PdfColor.fromInt(0xFFF59E0B);
@@ -22,9 +20,7 @@ class PdfService {
   static const PdfColor darkTextColor = PdfColor.fromInt(0xFF1E293B);
   static const PdfColor lightTextColor = PdfColor.fromInt(0xFF64748B);
   static const PdfColor borderColor = PdfColor.fromInt(0xFFE2E8F0);
-  static const PdfColor backgroundColor = PdfColor.fromInt(0xFFF8FAFC);
   static const PdfColor whiteColor = PdfColor.fromInt(0xFFFFFFFF);
-  static const PdfColor white70Color = PdfColor.fromInt(0xB3FFFFFF);
 
   PdfColor _colorWithOpacity(PdfColor color, double opacity) {
     int alpha = (opacity * 255).toInt();
@@ -50,14 +46,6 @@ class PdfService {
     final gpaModules = allModules.where((m) => m.isGpaModule).toList();
     final nonGpaModules = allModules.where((m) => m.isNonGpaModule).toList();
 
-    // Load logo if available
-    pw.MemoryImage? logoImage;
-    try {
-      final logoData = await rootBundle.load('assets/logo.png');
-      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
-    } catch (e) {}
-
-    // Calculate GPAs
     final semesterGpaModules = <int, List<Module>>{};
     for (var module in gpaModules) {
       semesterGpaModules.putIfAbsent(module.semester, () => []).add(module);
@@ -96,17 +84,16 @@ class PdfService {
       }
     }
 
-    double totalSemesterPoints = 0.0;
-    int totalSemesterCredits = 0;
+    double totalCoursePoints = 0.0;
+    int totalCourseCredits = 0;
     for (var sem in semesterGPAs.keys) {
-      totalSemesterPoints += semesterGPAs[sem]! * semesterGpaCredits[sem]!;
-      totalSemesterCredits += semesterGpaCredits[sem]!;
+      totalCoursePoints += semesterGPAs[sem]! * semesterGpaCredits[sem]!;
+      totalCourseCredits += semesterGpaCredits[sem]!;
     }
-    final courseGPA = totalSemesterCredits > 0
-        ? totalSemesterPoints / totalSemesterCredits
+    final courseGPA = totalCourseCredits > 0
+        ? totalCoursePoints / totalCourseCredits
         : 0.0;
 
-    // Check Non-GPA module pass status
     bool allNonGpaPassed = true;
     final nonGpaStatus = <int, Map<String, dynamic>>{};
     for (var sem in semesterNonGpaModules.keys) {
@@ -128,7 +115,6 @@ class PdfService {
       };
     }
 
-    // Collect failed and incomplete modules
     final List<Map<String, dynamic>> failedModules = [];
     final List<Map<String, dynamic>> incompleteModules = [];
 
@@ -192,19 +178,18 @@ class PdfService {
       }
     }
 
-    // ==================== PAGE 1: COVER PAGE ====================
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(30),
         build: (pw.Context context) => pw.Column(
           children: [
-            _buildHeader(logoImage),
+            _buildHeader(),
             pw.Spacer(),
             pw.Container(
               padding: const pw.EdgeInsets.all(40),
               decoration: pw.BoxDecoration(
-                color: backgroundColor,
+                color: PdfColor.fromInt(0xFFF8FAFC),
                 borderRadius: pw.BorderRadius.circular(20),
                 border: pw.Border.all(color: borderColor, width: 1),
               ),
@@ -276,14 +261,13 @@ class PdfService {
       ),
     );
 
-    // ==================== PAGE 2: STUDENT PROFILE ====================
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(30),
         build: (pw.Context context) => pw.Column(
           children: [
-            _buildHeader(logoImage),
+            _buildHeader(),
             pw.SizedBox(height: 20),
             _buildSectionTitle('Student Profile'),
             pw.SizedBox(height: 16),
@@ -301,10 +285,7 @@ class PdfService {
                   courseGPA.toStringAsFixed(2),
                   color: courseGPA >= 3.0 ? successColor : secondaryColor,
                 ),
-                _buildInfoCard(
-                  'Total Credits',
-                  totalSemesterCredits.toString(),
-                ),
+                _buildInfoCard('Total Credits', totalCourseCredits.toString()),
               ],
             ),
             pw.SizedBox(height: 20),
@@ -316,32 +297,6 @@ class PdfService {
       ),
     );
 
-    // ==================== PAGE 3: PERFORMANCE ANALYTICS (ALL SEMESTERS) ====================
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(30),
-        build: (pw.Context context) => pw.Column(
-          children: [
-            _buildHeader(logoImage),
-            pw.SizedBox(height: 20),
-            _buildSectionTitle('Performance Analytics'),
-            pw.SizedBox(height: 16),
-            ..._buildAllSemestersAnalytics(
-              semesterGPAs,
-              semesterGpaCredits,
-              nonGpaStatus,
-            ),
-            pw.SizedBox(height: 20),
-            _buildRecommendationsCard(suggestions),
-            pw.Spacer(),
-            _buildFooter(),
-          ],
-        ),
-      ),
-    );
-
-    // ==================== PAGES 4+: SEMESTER WISE RESULTS (WITH COLORS) ====================
     final semestersToProcess =
         semester != null
               ? [semester]
@@ -366,7 +321,7 @@ class PdfService {
             margin: const pw.EdgeInsets.all(30),
             build: (pw.Context context) => pw.Column(
               children: [
-                _buildHeader(logoImage),
+                _buildHeader(),
                 pw.SizedBox(height: 20),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -463,11 +418,7 @@ class PdfService {
                     ),
                   ),
                 pw.SizedBox(height: 20),
-                _buildResultsTableWithColors(
-                  allModulesInSemester,
-                  results,
-                  grades,
-                ),
+                _buildResultsTable(allModulesInSemester, results, grades),
                 pw.SizedBox(height: 20),
                 _buildSemesterSummary(
                   allModulesInSemester.length,
@@ -483,7 +434,6 @@ class PdfService {
       }
     }
 
-    // ==================== FAILED MODULES SUMMARY PAGE ====================
     if (failedModules.isNotEmpty) {
       pdf.addPage(
         pw.Page(
@@ -491,7 +441,7 @@ class PdfService {
           margin: const pw.EdgeInsets.all(30),
           build: (pw.Context context) => pw.Column(
             children: [
-              _buildHeader(logoImage),
+              _buildHeader(),
               pw.SizedBox(height: 20),
               _buildSectionTitle('Failed Modules Summary', color: errorColor),
               pw.SizedBox(height: 16),
@@ -509,7 +459,6 @@ class PdfService {
       );
     }
 
-    // ==================== INCOMPLETE MODULES SUMMARY PAGE ====================
     if (incompleteModules.isNotEmpty) {
       pdf.addPage(
         pw.Page(
@@ -517,7 +466,7 @@ class PdfService {
           margin: const pw.EdgeInsets.all(30),
           build: (pw.Context context) => pw.Column(
             children: [
-              _buildHeader(logoImage),
+              _buildHeader(),
               pw.SizedBox(height: 20),
               _buildSectionTitle(
                 'Incomplete Modules Summary',
@@ -540,7 +489,6 @@ class PdfService {
       );
     }
 
-    // Save PDF
     final dir = Platform.isIOS
         ? await getApplicationDocumentsDirectory()
         : await getExternalStorageDirectory();
@@ -553,11 +501,10 @@ class PdfService {
 
     final file = File('${pdfDir.path}/$fileName');
     await file.writeAsBytes(await pdf.save());
-
     return file.path;
   }
 
-  pw.Widget _buildHeader(pw.MemoryImage? logoImage) {
+  pw.Widget _buildHeader() {
     return pw.Container(
       width: double.infinity,
       padding: const pw.EdgeInsets.symmetric(vertical: 20, horizontal: 25),
@@ -586,19 +533,13 @@ class PdfService {
               pw.SizedBox(height: 4),
               pw.Text(
                 'Ratmalana, Sri Lanka',
-                style: pw.TextStyle(fontSize: 10, color: white70Color),
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  color: _colorWithOpacity(whiteColor, 0.7),
+                ),
               ),
             ],
           ),
-          if (logoImage != null)
-            pw.Container(
-              padding: const pw.EdgeInsets.all(6),
-              decoration: pw.BoxDecoration(
-                color: whiteColor,
-                borderRadius: pw.BorderRadius.circular(10),
-              ),
-              child: pw.Image(logoImage, width: 40, height: 40),
-            ),
         ],
       ),
     );
@@ -609,7 +550,7 @@ class PdfService {
       width: double.infinity,
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
-        color: backgroundColor,
+        color: PdfColor.fromInt(0xFFF8FAFC),
         borderRadius: pw.BorderRadius.circular(10),
       ),
       child: pw.Row(
@@ -657,7 +598,7 @@ class PdfService {
         margin: const pw.EdgeInsets.symmetric(horizontal: 4),
         padding: const pw.EdgeInsets.all(10),
         decoration: pw.BoxDecoration(
-          color: backgroundColor,
+          color: PdfColor.fromInt(0xFFF8FAFC),
           borderRadius: pw.BorderRadius.circular(8),
           border: pw.Border.all(color: borderColor, width: 0.5),
         ),
@@ -709,7 +650,10 @@ class PdfService {
               children: [
                 pw.Text(
                   'Degree Status',
-                  style: pw.TextStyle(fontSize: 10, color: white70Color),
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: _colorWithOpacity(whiteColor, 0.7),
+                  ),
                 ),
                 pw.Text(
                   isEligible
@@ -729,198 +673,7 @@ class PdfService {
     );
   }
 
-  List<pw.Widget> _buildAllSemestersAnalytics(
-    Map<int, double> semesterGPAs,
-    Map<int, int> semesterCredits,
-    Map<int, Map<String, dynamic>> nonGpaStatus,
-  ) {
-    final widgets = <pw.Widget>[];
-    final sortedSemesters = semesterGPAs.keys.toList()..sort();
-
-    for (var sem in sortedSemesters) {
-      final gpa = semesterGPAs[sem]!;
-      final nonGpaInfo = nonGpaStatus[sem];
-      final gpaColor = gpa >= 3.0
-          ? successColor
-          : gpa >= 2.0
-          ? secondaryColor
-          : warningColor;
-      final progressPercent = (gpa / 4.0).clamp(0.0, 1.0);
-
-      widgets.add(
-        pw.Container(
-          margin: const pw.EdgeInsets.only(bottom: 10),
-          padding: const pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            color: backgroundColor,
-            borderRadius: pw.BorderRadius.circular(8),
-            border: pw.Border.all(color: borderColor, width: 0.5),
-          ),
-          child: pw.Column(
-            children: [
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Semester $sem',
-                    style: pw.TextStyle(
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                      color: darkTextColor,
-                    ),
-                  ),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: pw.BoxDecoration(
-                      color: gpaColor,
-                      borderRadius: pw.BorderRadius.circular(12),
-                    ),
-                    child: pw.Text(
-                      'GPA: ${gpa.toStringAsFixed(2)}',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        fontWeight: pw.FontWeight.bold,
-                        color: whiteColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 6),
-              pw.Container(
-                height: 5,
-                width: double.infinity,
-                decoration: pw.BoxDecoration(
-                  color: borderColor,
-                  borderRadius: pw.BorderRadius.circular(2),
-                ),
-                child: pw.Container(
-                  width: 100 * progressPercent,
-                  height: 5,
-                  decoration: pw.BoxDecoration(
-                    color: gpaColor,
-                    borderRadius: pw.BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              if (nonGpaInfo != null && nonGpaInfo['total'] > 0) ...[
-                pw.SizedBox(height: 6),
-                pw.Row(
-                  children: [
-                    pw.Icon(
-                      nonGpaInfo['completed']
-                          ? pw.IconData(0xe876)
-                          : pw.IconData(0xe002),
-                      color: nonGpaInfo['completed']
-                          ? successColor
-                          : warningColor,
-                      size: 10,
-                    ),
-                    pw.SizedBox(width: 4),
-                    pw.Text(
-                      'Non-GPA: ${nonGpaInfo['passed']}/${nonGpaInfo['total']} passed',
-                      style: pw.TextStyle(
-                        fontSize: 8,
-                        color: nonGpaInfo['completed']
-                            ? successColor
-                            : warningColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              pw.SizedBox(height: 4),
-              pw.Text(
-                'Credits: ${semesterCredits[sem] ?? 0}',
-                style: pw.TextStyle(fontSize: 8, color: lightTextColor),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    return widgets;
-  }
-
-  pw.Widget _buildRecommendationsCard(List<String> suggestions) {
-    final hasSuggestions = suggestions.isNotEmpty;
-    return pw.Container(
-      width: double.infinity,
-      padding: const pw.EdgeInsets.all(14),
-      decoration: pw.BoxDecoration(
-        color: hasSuggestions
-            ? _colorWithOpacity(warningColor, 0.1)
-            : _colorWithOpacity(successColor, 0.1),
-        borderRadius: pw.BorderRadius.circular(10),
-        border: pw.Border.all(
-          color: hasSuggestions ? warningColor : successColor,
-          width: 0.5,
-        ),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Row(
-            children: [
-              pw.Container(
-                width: 18,
-                height: 18,
-                decoration: pw.BoxDecoration(
-                  color: hasSuggestions ? warningColor : successColor,
-                  shape: pw.BoxShape.circle,
-                ),
-                child: pw.Center(
-                  child: pw.Text(
-                    hasSuggestions ? '!' : '✓',
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      fontWeight: pw.FontWeight.bold,
-                      color: whiteColor,
-                    ),
-                  ),
-                ),
-              ),
-              pw.SizedBox(width: 8),
-              pw.Text(
-                hasSuggestions ? 'Recommendations' : 'Academic Standing',
-                style: pw.TextStyle(
-                  fontSize: 12,
-                  fontWeight: pw.FontWeight.bold,
-                  color: hasSuggestions ? warningColor : successColor,
-                ),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 8),
-          if (!hasSuggestions)
-            pw.Text(
-              'Excellent performance! You have met all degree requirements.',
-              style: pw.TextStyle(fontSize: 9, color: darkTextColor),
-            )
-          else
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: suggestions
-                  .map(
-                    (s) => pw.Padding(
-                      padding: const pw.EdgeInsets.only(bottom: 4),
-                      child: pw.Text(
-                        s,
-                        style: pw.TextStyle(fontSize: 8, color: darkTextColor),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildResultsTableWithColors(
+  pw.Widget _buildResultsTable(
     List<Module> modules,
     List<Result> results,
     List<Grade> grades,
@@ -1005,7 +758,7 @@ class PdfService {
       width: double.infinity,
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
-        color: backgroundColor,
+        color: PdfColor.fromInt(0xFFF8FAFC),
         borderRadius: pw.BorderRadius.circular(8),
         border: pw.Border.all(color: borderColor, width: 0.5),
       ),
@@ -1261,7 +1014,7 @@ class PdfService {
 
   PdfColor _getGradeColorForPdf(String grade) {
     if (['A+', 'A', 'A-'].contains(grade)) return successColor;
-    if (['B+', 'B', 'B-'].contains(grade)) return accentColor;
+    if (['B+', 'B', 'B-'].contains(grade)) return secondaryColor;
     if (['C+', 'C', 'C-'].contains(grade)) return goldColor;
     if (['F', 'F(CA)', 'F(ET)'].contains(grade)) return errorColor;
     if (['I', 'I(ET)', 'I(CA)'].contains(grade)) return warningColor;

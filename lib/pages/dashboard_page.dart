@@ -5,6 +5,7 @@ import 'package:result_wave/models/grade.dart';
 import 'package:result_wave/models/student.dart';
 import 'package:result_wave/models/course.dart';
 import 'package:result_wave/pages/insights_page.dart';
+import 'package:result_wave/pages/settings_page.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
@@ -44,7 +45,6 @@ class _DashboardPageState extends State<DashboardPage>
   List<Map<String, dynamic>> _failedModules = [];
   List<Map<String, dynamic>> _incompleteModules = [];
 
-  // Collapse states
   bool _isFailedModulesExpanded = false;
   bool _isIncompleteModulesExpanded = false;
 
@@ -180,10 +180,7 @@ class _DashboardPageState extends State<DashboardPage>
       }
     }
 
-    // Calculate insights count
     int insightsCount = 0;
-
-    // Failed modules
     for (var result in results) {
       if (['F', 'F(ET)', 'F(CA)'].contains(result.grade)) {
         insightsCount++;
@@ -192,31 +189,23 @@ class _DashboardPageState extends State<DashboardPage>
         insightsCount++;
       }
     }
-
-    // GPA issues
     if (courseGPA < 2.0)
       insightsCount++;
     else if (courseGPA < 2.5)
       insightsCount++;
 
-    // Semester issues
     for (var semester in semesterGPAs.keys) {
       if (semesterGPAs[semester]! < 2.0) insightsCount++;
     }
 
-    // Non-GPA issues
     for (var semester in semesterNonGpaModules.keys) {
       int passed = semesterPassedNonGpa[semester] ?? 0;
       int total = semesterTotalNonGpa[semester] ?? 0;
       if (passed < total) insightsCount++;
     }
-
-    // Degree eligibility
     if (!isEligible) insightsCount++;
+    if (insightsCount == 0) insightsCount = 1;
 
-    if (insightsCount == 0) insightsCount = 1; // Show positive insight
-
-    // Failed modules list
     List<Map<String, dynamic>> failedModules = [];
     List<Map<String, dynamic>> incompleteModules = [];
 
@@ -300,6 +289,15 @@ class _DashboardPageState extends State<DashboardPage>
     return 'Needs Improvement';
   }
 
+  void _openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SettingsPage(studentId: widget.studentId),
+      ),
+    );
+  }
+
   void _openInsights() {
     Navigator.push(
       context,
@@ -322,40 +320,6 @@ class _DashboardPageState extends State<DashboardPage>
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          leading: IconButton(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.auto_awesome),
-                Positioned(
-                  right: -4,
-                  top: -4,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: AppColors.gold,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 18,
-                      minHeight: 18,
-                    ),
-                    child: Text(
-                      '$_insightsCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            onPressed: _openInsights,
-            tooltip: 'AI Insights',
-          ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -368,26 +332,45 @@ class _DashboardPageState extends State<DashboardPage>
             ],
           ),
           actions: [
-            Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                gradient: AppGradients.goldGradient,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
+            IconButton(
+              icon: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  const Icon(Icons.star, size: 16, color: Colors.white),
-                  const SizedBox(width: 4),
-                  Text(
-                    _courseGPA.toStringAsFixed(2),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  const Icon(Icons.auto_awesome),
+                  if (_insightsCount > 0)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: AppColors.gold,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '$_insightsCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
+              onPressed: _openInsights,
+              tooltip: 'AI Insights',
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: _openSettings,
+              tooltip: 'Settings',
             ),
           ],
         ),
@@ -651,7 +634,7 @@ class _DashboardPageState extends State<DashboardPage>
                       ),
                       const SizedBox(height: 20),
 
-                      // Failed Modules Section (Collapsible)
+                      // Failed Modules Section
                       if (_failedModules.isNotEmpty) ...[
                         FadeInAnimation(
                           delay: 400,
@@ -729,7 +712,7 @@ class _DashboardPageState extends State<DashboardPage>
                         const SizedBox(height: 20),
                       ],
 
-                      // Incomplete Modules Section (Collapsible)
+                      // Incomplete Modules Section
                       if (_incompleteModules.isNotEmpty) ...[
                         FadeInAnimation(
                           delay: 450,

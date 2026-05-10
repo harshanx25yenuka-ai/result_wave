@@ -15,7 +15,6 @@ class AuthService {
       return false;
     }
 
-    // Check if session has expired (7 days)
     final now = DateTime.now().millisecondsSinceEpoch;
     final sessionDuration = now - loginTimestamp;
     final maxDuration = _sessionDurationDays * 24 * 60 * 60 * 1000;

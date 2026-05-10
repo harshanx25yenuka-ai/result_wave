@@ -4,7 +4,6 @@ import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/screens/home_screen.dart';
 import 'package:result_wave/services/auth_service.dart';
 import 'package:result_wave/services/database_service.dart';
-import 'package:result_wave/services/supabase_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 
@@ -19,7 +18,6 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   final AuthService _authService = AuthService();
-  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -62,15 +60,6 @@ class _SplashScreenState extends State<SplashScreen>
       final existingStudent = students.any((s) => s.studentId == studentId);
 
       if (existingStudent && studentId != null) {
-        // Pre-load avatar and backup data for settings page
-        try {
-          await _supabaseService.initSupabase();
-          await _supabaseService.getUserAvatar(studentId);
-          await _supabaseService.getLatestBackup(studentId);
-        } catch (e) {
-          print('Pre-load error: $e');
-        }
-
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

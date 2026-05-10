@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:result_wave/models/module.dart';
-import 'package:result_wave/models/result.dart';
-import 'package:result_wave/models/student.dart';
 import 'package:result_wave/screens/home_screen.dart';
 import 'package:result_wave/screens/create_account_screen.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/auth_service.dart';
-import 'package:result_wave/services/supabase_service.dart';
+import 'package:result_wave/services/avatar_cache_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -19,13 +16,10 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _studentIdController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _isLoggingIn = false;
-  bool _obscurePassword = true;
   late AnimationController _controller;
   final AuthService _authService = AuthService();
-  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -40,85 +34,32 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _controller.dispose();
     _studentIdController.dispose();
-    _passwordController.dispose();
     super.dispose();
-  }
-
-  Future<void> _checkAndRestoreBackup(String studentId) async {
-    try {
-      final latestBackup = await _supabaseService.getLatestBackup(studentId);
-
-      if (latestBackup.isNotEmpty) {
-        final db = await DatabaseService().database;
-        final restored = await _supabaseService.restoreBackup(
-          latestBackup['id'],
-          db,
-        );
-
-        if (restored) {
-          _showMessage('Latest backup restored successfully!', isError: false);
-        }
-      }
-    } catch (e) {
-      print('Backup restore error: $e');
-    }
   }
 
   void _login() async {
     final studentId = _studentIdController.text.trim().toUpperCase();
-    final password = _passwordController.text;
 
     if (studentId.isEmpty) {
       _showMessage('Please enter Student ID', isError: true);
-      return;
-    }
-    if (password.isEmpty) {
-      _showMessage('Please enter Password', isError: true);
       return;
     }
 
     setState(() => _isLoggingIn = true);
 
     try {
-      final result = await _supabaseService.loginUser(
-        studentId: studentId,
-        password: password,
-      );
-
-      if (!result['success']) {
-        _showMessage(result['error'], isError: true);
-        setState(() => _isLoggingIn = false);
-        return;
-      }
-
       final students = await DatabaseService().getStudents();
-      var student = students.firstWhere(
+      final student = students.firstWhere(
         (s) => s.studentId == studentId,
-        orElse: () => Student(
-          studentId: studentId,
-          studentName: result['user']['student_name'],
-          courseId: result['user']['course_id'],
-        ),
+        orElse: () => throw Exception('Student ID not found'),
       );
 
-      if (!students.any((s) => s.studentId == studentId)) {
-        await DatabaseService().insertStudent(student);
-
-        List<Module> modules = await DatabaseService().getModulesByCourse(
-          student.courseId,
-        );
-        for (var module in modules) {
-          await DatabaseService().insertResult(
-            Result(moduleId: module.moduleId, grade: 'N/A'),
-          );
-        }
+      // Load avatar from cache
+      final cachedAvatarId = await AvatarCacheService.getAvatar(studentId);
+      if (cachedAvatarId != null) {
+        print('Avatar loaded from cache: $cachedAvatarId');
       }
 
-      // Pre-load avatar and backup data for settings page
-      await _supabaseService.getUserAvatar(studentId);
-      await _supabaseService.getLatestBackup(studentId);
-
-      await _checkAndRestoreBackup(studentId);
       await _authService.setLoggedIn(studentId);
 
       await Future.delayed(const Duration(milliseconds: 500));
@@ -132,7 +73,10 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       );
     } catch (e) {
-      _showMessage('Login error: $e', isError: true);
+      _showMessage(
+        'Student ID not found. Please create an account.',
+        isError: true,
+      );
       setState(() => _isLoggingIn = false);
     }
   }
@@ -232,6 +176,7 @@ class _LoginScreenState extends State<LoginScreen>
                               Icons.badge,
                               color: AppColors.primaryBlue,
                             ),
+                            hintText: 'Enter your Student ID',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
@@ -242,46 +187,6 @@ class _LoginScreenState extends State<LoginScreen>
                                 : Colors.grey.shade50,
                           ),
                           textCapitalization: TextCapitalization.characters,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Password',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            prefixIcon: Icon(
-                              Icons.lock,
-                              color: AppColors.primaryBlue,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: AppColors.primaryBlue,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: isDark
-                                ? AppColors.surfaceDark
-                                : Colors.grey.shade50,
-                          ),
                         ),
                         const SizedBox(height: 24),
                         SizedBox(

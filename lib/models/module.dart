@@ -4,7 +4,7 @@ class Module {
   final int credits;
   final List<String> courseIds;
   final int semester;
-  final String gpaType; // "gpa" or "non-gpa"
+  final String gpaType;
 
   Module({
     required this.moduleId,
@@ -22,7 +22,7 @@ class Module {
       credits: json['Credits'],
       courseIds: List<String>.from(json['Course_Id']),
       semester: json['Semester'],
-      gpaType: json['gpa_type'] ?? 'gpa', // Default to 'gpa' if not present
+      gpaType: json['gpa_type'] ?? 'gpa',
     );
   }
 

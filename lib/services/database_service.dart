@@ -77,7 +77,6 @@ class DatabaseService {
   Future<void> loadJsonData() async {
     final db = await database;
 
-    // Load courses
     String coursesJson = await rootBundle.loadString('db/courses.json');
     List<dynamic> courses = jsonDecode(coursesJson);
     for (var course in courses) {
@@ -87,7 +86,6 @@ class DatabaseService {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
-    // Load grades
     String gradesJson = await rootBundle.loadString('db/grades.json');
     List<dynamic> grades = jsonDecode(gradesJson);
     for (var grade in grades) {
@@ -98,7 +96,6 @@ class DatabaseService {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
-    // Load modules
     String modulesJson = await rootBundle.loadString('db/modules.json');
     List<dynamic> modules = jsonDecode(modulesJson);
     for (var module in modules) {
