@@ -40,6 +40,7 @@ flutter:
     - db/grades.json
     - db/modules.json
     - db/avatars.json
+    - db/about_info.json
     - images/university_logo.png
     - images/app_logo.png
     - assets/app_icon.png

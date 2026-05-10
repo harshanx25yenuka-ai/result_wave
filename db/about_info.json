@@ -1,0 +1,69 @@
+{
+    "logo": "assets/app_icon.png",
+    "app_name": "ResultWave",
+    "tagline": "Academic Excellence Tracker",
+    "version": "2.0.0",
+    "app_description": "ResultWave is a comprehensive academic performance tracking system designed for university students. It helps you track your grades, calculate GPAs, monitor semester performance, and generate professional academic reports. With AI-powered insights and a beautiful modern interface, ResultWave makes academic progress tracking simple and effective.",
+    "key_features": [
+        "Real-time GPA & CGPA Calculation",
+        "Semester-wise Performance Tracking",
+        "AI-Powered Academic Insights",
+        "Professional PDF Report Generation",
+        "Customizable Profile with Avatars",
+        "Dark/Light Theme Support",
+        "Offline-First Architecture",
+        "Grade Management System",
+        "Degree Eligibility Checker",
+        "Non-GPA Module Tracking"
+    ],
+    "developer_info": {
+        "developed_by": "Modhra Technologies",
+        "platform": "Mobile Application Platform",
+        "founded": "2024",
+        "location": "Sri Lanka"
+    },
+    "support_contact": {
+        "email": "resultwave@modhra.com",
+        "website": "www.resultwave.com",
+        "phone": "+94 XX XXX XXXX",
+        "github": "github.com/resultwave",
+        "twitter": "twitter.com/resultwave"
+    },
+    "legal_info": {
+        "privacy_policy": "Your privacy is important to us. ResultWave does not collect any personal data as it operates completely offline. All your academic data is stored locally on your device and never shared with any external servers. We do not use analytics, tracking, or any data collection services.",
+        "terms_of_service": "By using ResultWave, you agree to use this application for legitimate academic purposes only. You are responsible for the accuracy of the data you enter. The developers are not liable for any consequences resulting from the use of this application. This software is provided 'as is' without any warranties.",
+        "refund_policy": "ResultWave is a free and open-source application. No payments are required for any features. Therefore, no refund policy applies. If you have paid for this application anywhere, please contact us immediately."
+    },
+    "security_statement": "ResultWave prioritizes your data security. The application operates entirely offline with no internet connectivity required. All data is stored locally using SQLite database with encryption support. No data is ever transmitted to external servers. Your academic information remains solely on your device.",
+    "social_links": {
+        "github": "https://github.com/resultwave",
+        "twitter": "https://twitter.com/resultwave",
+        "linkedin": "https://linkedin.com/company/resultwave"
+    },
+    "copyright": "© 2024 ResultWave. All rights reserved.",
+    "changelog": [
+        {
+            "version": "2.0.0",
+            "date": "2024-01-15",
+            "changes": [
+                "Complete UI redesign with glass morphism",
+                "Added AI-powered insights system",
+                "Added avatar customization",
+                "Improved dark mode support",
+                "Enhanced PDF report generation",
+                "Added semester-wise GPA tracking",
+                "Performance optimizations"
+            ]
+        },
+        {
+            "version": "1.0.0",
+            "date": "2023-10-01",
+            "changes": [
+                "Initial release",
+                "Basic GPA calculation",
+                "Result management",
+                "PDF export functionality"
+            ]
+        }
+    ]
+}

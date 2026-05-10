@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:result_wave/providers/theme_provider.dart';
 import 'package:result_wave/services/pdf_service.dart';
+import 'package:result_wave/screens/about_screen.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -209,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             const SizedBox(height: 20),
 
-            // About Section
+            // About Section - Navigates to AboutScreen
             FadeInAnimation(
               delay: 300,
               child: _buildSectionHeader('About', Icons.info_outline, isDark),
@@ -218,84 +219,48 @@ class _SettingsScreenState extends State<SettingsScreen>
             FadeInAnimation(
               delay: 350,
               child: GlassCard(
-                child: Column(
-                  children: [
-                    _buildAboutRow('Version', '2.0.0', isDark),
-                    _buildAboutRow('Developer', 'ResultWave Team', isDark),
-                    _buildAboutRow('Email', 'support@resultwave.com', isDark),
-                    _buildAboutRow('Website', 'www.resultwave.com', isDark),
-                    const Divider(),
-                    _buildAboutRow('Built with', 'Flutter & SQLite', isDark),
-                    _buildAboutRow('License', 'MIT', isDark),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.info.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.nature, size: 16, color: AppColors.info),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Future Improvements',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.info,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '• Push Notifications\n• Course Materials\n• Timetable Integration\n• Exam Schedule\n• Peer Discussion Forums',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isDark
-                                        ? Colors.grey.shade400
-                                        : Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.info.withOpacity(0.1),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.gold.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.copyright,
-                            size: 16,
-                            color: AppColors.gold,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '© 2024 ResultWave. All rights reserved.',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isDark
-                                    ? Colors.grey.shade400
-                                    : Colors.grey.shade600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: Icon(
+                      Icons.info_outline,
+                      color: AppColors.info,
+                      size: 22,
                     ),
-                  ],
+                  ),
+                  title: Text(
+                    'About ResultWave',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'App information, version, and legal',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                  trailing: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AboutScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -374,32 +339,6 @@ class _SettingsScreenState extends State<SettingsScreen>
               color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
             ),
       onTap: onTap,
-    );
-  }
-
-  Widget _buildAboutRow(String label, String value, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
