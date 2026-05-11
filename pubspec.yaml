@@ -20,6 +20,7 @@ dependencies:
   share_plus: ^13.1.0
   # supabase_flutter: ^2.0.0  # Add this
   intl: ^0.18.1  # Add this for date formatting
+  open_file: ^3.3.2
   # package_info_plus: ^10.1.0
 
 dev_dependencies:
@@ -36,12 +37,8 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - db/courses.json
-    - db/grades.json
-    - db/modules.json
-    - db/avatars.json
-    - db/about_info.json
-    - images/university_logo.png
-    - images/app_logo.png
+    - db/
+    - images/
     - assets/app_icon.png
     - assets/avatars/
+    - assets/materials/

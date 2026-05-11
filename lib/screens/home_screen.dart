@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:result_wave/pages/dashboard_page.dart';
 import 'package:result_wave/pages/results_page.dart';
 import 'package:result_wave/pages/profile_page.dart';
+import 'package:result_wave/pages/materials_page.dart'; // Add this import
 import 'package:result_wave/services/auth_service.dart';
 import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/utils/constants.dart';
@@ -26,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _pages = [
       DashboardPage(studentId: widget.studentId),
       ResultsPage(studentId: widget.studentId),
+      MaterialsPage(studentId: widget.studentId), // Add Materials Page
       ProfilePage(studentId: widget.studentId),
     ];
   }
@@ -126,6 +128,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icon(Icons.list_alt_outlined),
                 activeIcon: Icon(Icons.list_alt),
                 label: 'Results',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.folder_outlined),
+                activeIcon: Icon(Icons.folder),
+                label: 'Materials',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person_outline),
