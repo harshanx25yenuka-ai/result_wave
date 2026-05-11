@@ -42,7 +42,4 @@ flutter:
     - images/
     - assets/app_icon.png
     - assets/avatars/
-    - assets/materials/IT103011/notes/chapter_01.pdf
-    - assets/materials/IT103011/notes/chapter_02.pdf
-    - assets/materials/IT103011/past_papers/examination_2021-22.pdf
-    - assets/materials/IT103011/assignments/Individual_Assignment_01.pdf
+    - assets/materials/
