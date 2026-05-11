@@ -114,12 +114,23 @@ class _ResultsPageState extends State<ResultsPage>
     return ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'].contains(grade);
   }
 
-  void _editResult(String moduleId, String currentGrade) async {
+  void _editResult(
+    String moduleId,
+    String moduleName,
+    int credits,
+    bool isGpaModule,
+    String currentGrade,
+  ) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            EditResultPage(moduleId: moduleId, currentGrade: currentGrade),
+        builder: (context) => EditResultPage(
+          moduleId: moduleId,
+          moduleName: moduleName,
+          credits: credits,
+          isGpaModule: isGpaModule,
+          currentGrade: currentGrade,
+        ),
       ),
     );
     if (result != null) {
@@ -291,8 +302,8 @@ class _ResultsPageState extends State<ResultsPage>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
-    final chipWidth = screenWidth * 0.28; // 28% of screen width for each chip
-    final chipSpacing = 8.0; // Space between chips
+    final chipWidth = screenWidth * 0.28;
+    final chipSpacing = 8.0;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -322,10 +333,9 @@ class _ResultsPageState extends State<ResultsPage>
             ? _buildEmptyState()
             : Column(
                 children: [
-                  // Semester Chips Bar (Scrollable with 3-chip view)
                   Container(
                     margin: const EdgeInsets.only(top: 16, bottom: 8),
-                    height: 55, // Reduced from 80 to 55 (30% reduction)
+                    height: 55,
                     child: ListView.builder(
                       controller: _chipScrollController,
                       scrollDirection: Axis.horizontal,
@@ -350,7 +360,6 @@ class _ResultsPageState extends State<ResultsPage>
                     ),
                   ),
 
-                  // Page Indicator Dots
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     child: Row(
@@ -375,7 +384,6 @@ class _ResultsPageState extends State<ResultsPage>
                     ),
                   ),
 
-                  // PageView for Swipe Navigation
                   Expanded(
                     child: PageView.builder(
                       controller: _pageController,
@@ -806,7 +814,13 @@ class _ResultsPageState extends State<ResultsPage>
                 borderRadius: BorderRadius.circular(10),
               ),
               child: InkWell(
-                onTap: () => _editResult(module.moduleId, result.grade),
+                onTap: () => _editResult(
+                  module.moduleId,
+                  module.moduleName,
+                  module.credits,
+                  module.isGpaModule,
+                  result.grade,
+                ),
                 borderRadius: BorderRadius.circular(10),
                 child: Row(
                   children: [

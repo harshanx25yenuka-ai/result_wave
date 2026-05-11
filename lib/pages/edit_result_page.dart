@@ -8,11 +8,17 @@ import 'package:result_wave/widgets/glass_card.dart';
 
 class EditResultPage extends StatefulWidget {
   final String moduleId;
+  final String moduleName;
+  final int credits;
+  final bool isGpaModule;
   final String currentGrade;
 
   const EditResultPage({
     Key? key,
     required this.moduleId,
+    required this.moduleName,
+    required this.credits,
+    required this.isGpaModule,
     required this.currentGrade,
   }) : super(key: key);
 
@@ -56,7 +62,7 @@ class _EditResultPageState extends State<EditResultPage>
       setState(() => _isLoading = false);
     } catch (e) {
       setState(() => _isLoading = false);
-      _showMessage('Error loading grades: $e', isError: true);
+      _showErrorSnackbar('Error loading grades: $e');
     }
   }
 
@@ -69,32 +75,31 @@ class _EditResultPageState extends State<EditResultPage>
           Result(moduleId: widget.moduleId, grade: _selectedGrade!),
         );
 
-        _showMessage('Result updated successfully!', isError: false);
+        // Clear any existing snackbars before showing new one
+        ScaffoldMessenger.of(context).clearSnackBars();
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Show success snackbar
+        _showSuccessSnackbar(widget.currentGrade, _selectedGrade!);
+
+        await Future.delayed(const Duration(milliseconds: 800));
 
         if (mounted) {
+          // Clear snackbars again before navigation
+          ScaffoldMessenger.of(context).clearSnackBars();
           Navigator.pop(context, _selectedGrade);
         }
       } catch (e) {
         setState(() => _isSaving = false);
-        _showMessage('Error saving result: $e', isError: true);
+        _showErrorSnackbar('Error saving result: $e');
       }
     } else if (_selectedGrade == widget.currentGrade) {
-      _showMessage('No changes made', isError: false);
-      Navigator.pop(context);
+      _showInfoSnackbar('No changes made');
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        Navigator.pop(context);
+      }
     }
-  }
-
-  void _showMessage(String message, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? AppColors.error : AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   Color _getGradeColor(String grade) {
@@ -105,6 +110,15 @@ class _EditResultPageState extends State<EditResultPage>
     if (['F', 'F(CA)', 'F(ET)'].contains(grade)) return AppColors.error;
     if (['I', 'I(ET)', 'I(CA)'].contains(grade)) return AppColors.warning;
     return Colors.grey;
+  }
+
+  String _getGradeIcon(String grade) {
+    if (['A+', 'A', 'A-'].contains(grade)) return '🎉';
+    if (['B+', 'B', 'B-'].contains(grade)) return '👍';
+    if (['C+', 'C', 'C-'].contains(grade)) return '📚';
+    if (['D+', 'D'].contains(grade)) return '⚠️';
+    if (['F', 'F(CA)', 'F(ET)'].contains(grade)) return '❌';
+    return '📝';
   }
 
   String _getGradeDescription(String grade) {
@@ -148,16 +162,302 @@ class _EditResultPageState extends State<EditResultPage>
     return gradeObj.gradePoint;
   }
 
+  void _showSuccessSnackbar(String oldGrade, String newGrade) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final oldGradeColor = _getGradeColor(oldGrade);
+    final newGradeColor = _getGradeColor(newGrade);
+    final oldGradeIcon = _getGradeIcon(oldGrade);
+    final newGradeIcon = _getGradeIcon(newGrade);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: AppGradients.successGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.success.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.check_circle,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Grade Updated Successfully!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.grey.shade800
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            oldGradeIcon,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            oldGrade,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: oldGradeColor,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.arrow_forward,
+                            size: 14,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            newGradeIcon,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            newGrade,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: newGradeColor,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '+${(_getGradePointValue(newGrade) - _getGradePointValue(oldGrade)).toStringAsFixed(1)}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Grade points updated from ${_getGradePointValue(oldGrade).toStringAsFixed(1)} to ${_getGradePointValue(newGrade).toStringAsFixed(1)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.error_outline,
+                  color: AppColors.error,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Update Failed',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(message, style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showInfoSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.info_outline,
+                  color: AppColors.info,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Information',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(message, style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildMetadataChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Edit Result'),
+        centerTitle: true,
         elevation: 0,
+        backgroundColor: Colors.transparent,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: isDark
+                ? AppGradients.darkBackgroundGradient
+                : AppGradients.backgroundGradient,
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+          icon: Icon(
+            Icons.close,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+          onPressed: () {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            Navigator.pop(context);
+          },
         ),
         actions: [
           if (_selectedGrade != widget.currentGrade && _selectedGrade != null)
@@ -184,7 +484,7 @@ class _EditResultPageState extends State<EditResultPage>
       ),
       body: Container(
         decoration: BoxDecoration(
-          gradient: Theme.of(context).brightness == Brightness.dark
+          gradient: isDark
               ? AppGradients.darkBackgroundGradient
               : AppGradients.backgroundGradient,
         ),
@@ -195,11 +495,12 @@ class _EditResultPageState extends State<EditResultPage>
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      // Module Info Card
+                      // Enhanced Module Information Card
                       GlassCard(
                         child: Column(
                           children: [
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Container(
                                   width: 60,
@@ -220,28 +521,64 @@ class _EditResultPageState extends State<EditResultPage>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
-                                        'Module Information',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
                                       Text(
                                         widget.moduleId,
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
                                         ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        widget.moduleName,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        children: [
+                                          _buildMetadataChip(
+                                            icon: Icons.credit_card,
+                                            label: '${widget.credits} Credits',
+                                            color: AppColors.accentTeal,
+                                            isDark: isDark,
+                                          ),
+                                          _buildMetadataChip(
+                                            icon: widget.isGpaModule
+                                                ? Icons.auto_graph
+                                                : Icons.school,
+                                            label: widget.isGpaModule
+                                                ? 'GPA Module'
+                                                : 'Non-GPA Module',
+                                            color: widget.isGpaModule
+                                                ? AppColors.primaryBlue
+                                                : AppColors.warning,
+                                            isDark: isDark,
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 20),
-                            Divider(color: Colors.grey.shade200),
+                            const SizedBox(height: 16),
+                            Divider(
+                              color: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade200,
+                            ),
                             const SizedBox(height: 16),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -273,13 +610,25 @@ class _EditResultPageState extends State<EditResultPage>
                                         ),
                                         borderRadius: BorderRadius.circular(30),
                                       ),
-                                      child: Text(
-                                        widget.currentGrade,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 20,
-                                          color: Colors.white,
-                                        ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            _getGradeIcon(widget.currentGrade),
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            widget.currentGrade,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 20,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -301,9 +650,12 @@ class _EditResultPageState extends State<EditResultPage>
                                         _getGradePointValue(
                                           widget.currentGrade,
                                         ).toStringAsFixed(1),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 20,
                                           fontWeight: FontWeight.bold,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black87,
                                         ),
                                       ),
                                     ],
@@ -347,7 +699,7 @@ class _EditResultPageState extends State<EditResultPage>
                             const SizedBox(height: 20),
 
                             // Grade Grid
-                            _buildGradeGrid(),
+                            _buildGradeGrid(isDark),
 
                             if (_selectedGrade != null &&
                                 _selectedGrade != widget.currentGrade)
@@ -388,10 +740,43 @@ class _EditResultPageState extends State<EditResultPage>
                                               ),
                                             ),
                                             const SizedBox(height: 2),
-                                            Text(
-                                              'Updating from "${widget.currentGrade}" to "$_selectedGrade"',
-                                              style: const TextStyle(
-                                                fontSize: 13,
+                                            RichText(
+                                              text: TextSpan(
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                ),
+                                                children: [
+                                                  TextSpan(
+                                                    text: widget.currentGrade,
+                                                    style: TextStyle(
+                                                      color: _getGradeColor(
+                                                        widget.currentGrade,
+                                                      ),
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  const TextSpan(text: ' → '),
+                                                  TextSpan(
+                                                    text: _selectedGrade,
+                                                    style: TextStyle(
+                                                      color: _getGradeColor(
+                                                        _selectedGrade!,
+                                                      ),
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  const TextSpan(text: '  '),
+                                                  TextSpan(
+                                                    text:
+                                                        '(+${(_getGradePointValue(_selectedGrade!) - _getGradePointValue(widget.currentGrade)).toStringAsFixed(1)} pts)',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppColors.success,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],
@@ -411,7 +796,10 @@ class _EditResultPageState extends State<EditResultPage>
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).clearSnackBars();
+                                Navigator.pop(context);
+                              },
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 16,
@@ -419,9 +807,18 @@ class _EditResultPageState extends State<EditResultPage>
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
-                                side: BorderSide(color: Colors.grey.shade400),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade400,
+                                ),
                               ),
-                              child: const Text('Cancel'),
+                              child: Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -466,7 +863,7 @@ class _EditResultPageState extends State<EditResultPage>
     );
   }
 
-  Widget _buildGradeGrid() {
+  Widget _buildGradeGrid(bool isDark) {
     // Group grades by category
     final List<Map<String, dynamic>> gradeCategories = [
       {
@@ -519,7 +916,7 @@ class _EditResultPageState extends State<EditResultPage>
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   letterSpacing: 0.5,
                 ),
               ),
@@ -530,16 +927,14 @@ class _EditResultPageState extends State<EditResultPage>
                 children: categoryGrades.map((grade) {
                   final isSelected = _selectedGrade == grade.grade;
                   final gradeColor = _getGradeColor(grade.grade);
+                  final gradeIcon = _getGradeIcon(grade.grade);
 
                   return GestureDetector(
                     onTap: () {
                       setState(() {
                         _selectedGrade = grade.grade;
                       });
-                      _showMessage(
-                        'Selected: ${grade.grade} - ${_getGradeDescription(grade.grade)}',
-                        isError: false,
-                      );
+                      // Optional: Show preview snackbar
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
@@ -576,10 +971,12 @@ class _EditResultPageState extends State<EditResultPage>
                       ),
                       child: Column(
                         children: [
+                          Text(gradeIcon, style: const TextStyle(fontSize: 16)),
+                          const SizedBox(height: 4),
                           Text(
                             grade.grade,
                             style: TextStyle(
-                              fontSize: 18,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: isSelected ? Colors.white : gradeColor,
                             ),
