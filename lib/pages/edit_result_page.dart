@@ -5,6 +5,7 @@ import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
+import 'package:result_wave/widgets/grade_card.dart';
 
 class EditResultPage extends StatefulWidget {
   final String moduleId;
@@ -75,16 +76,12 @@ class _EditResultPageState extends State<EditResultPage>
           Result(moduleId: widget.moduleId, grade: _selectedGrade!),
         );
 
-        // Clear any existing snackbars before showing new one
         ScaffoldMessenger.of(context).clearSnackBars();
-
-        // Show success snackbar
         _showSuccessSnackbar(widget.currentGrade, _selectedGrade!);
 
         await Future.delayed(const Duration(milliseconds: 800));
 
         if (mounted) {
-          // Clear snackbars again before navigation
           ScaffoldMessenger.of(context).clearSnackBars();
           Navigator.pop(context, _selectedGrade);
         }
@@ -118,40 +115,8 @@ class _EditResultPageState extends State<EditResultPage>
     if (['C+', 'C', 'C-'].contains(grade)) return '📚';
     if (['D+', 'D'].contains(grade)) return '⚠️';
     if (['F', 'F(CA)', 'F(ET)'].contains(grade)) return '❌';
+    if (['I', 'I(ET)', 'I(CA)'].contains(grade)) return '⏳';
     return '📝';
-  }
-
-  String _getGradeDescription(String grade) {
-    switch (grade) {
-      case 'A+':
-        return 'Exceptional Performance';
-      case 'A':
-        return 'Excellent Performance';
-      case 'A-':
-        return 'Very Good Performance';
-      case 'B+':
-        return 'Good Performance';
-      case 'B':
-        return 'Satisfactory Performance';
-      case 'B-':
-        return 'Adequate Performance';
-      case 'C+':
-        return 'Fair Performance';
-      case 'C':
-        return 'Passing Performance';
-      case 'C-':
-        return 'Marginal Performance';
-      case 'D+':
-        return 'Below Average';
-      case 'D':
-        return 'Poor Performance';
-      case 'F':
-        return 'Failed';
-      case 'I':
-        return 'Incomplete';
-      default:
-        return '';
-    }
   }
 
   double _getGradePointValue(String grade) {
@@ -698,8 +663,8 @@ class _EditResultPageState extends State<EditResultPage>
                             ),
                             const SizedBox(height: 20),
 
-                            // Grade Grid
-                            _buildGradeGrid(isDark),
+                            // Inline Grade Grid with Fixed Size Cards
+                            _buildInlineGradeGrid(isDark),
 
                             if (_selectedGrade != null &&
                                 _selectedGrade != widget.currentGrade)
@@ -767,7 +732,7 @@ class _EditResultPageState extends State<EditResultPage>
                                                           FontWeight.bold,
                                                     ),
                                                   ),
-                                                  const TextSpan(text: '  '),
+                                                  const TextSpan(text: ' '),
                                                   TextSpan(
                                                     text:
                                                         '(+${(_getGradePointValue(_selectedGrade!) - _getGradePointValue(widget.currentGrade)).toStringAsFixed(1)} pts)',
@@ -863,139 +828,47 @@ class _EditResultPageState extends State<EditResultPage>
     );
   }
 
-  Widget _buildGradeGrid(bool isDark) {
-    // Group grades by category
-    final List<Map<String, dynamic>> gradeCategories = [
-      {
-        'name': 'Excellent',
-        'grades': ['A+', 'A', 'A-'],
-        'color': AppColors.success,
-      },
-      {
-        'name': 'Good',
-        'grades': ['B+', 'B', 'B-'],
-        'color': AppColors.primaryBlue,
-      },
-      {
-        'name': 'Satisfactory',
-        'grades': ['C+', 'C', 'C-'],
-        'color': AppColors.accentTeal,
-      },
-      {
-        'name': 'Poor',
-        'grades': ['D+', 'D'],
-        'color': Colors.orange,
-      },
-      {
-        'name': 'Fail',
-        'grades': ['F', 'F(CA)', 'F(ET)'],
-        'color': AppColors.error,
-      },
-      {
-        'name': 'Incomplete',
-        'grades': ['I', 'I(ET)', 'I(CA)'],
-        'color': AppColors.warning,
-      },
+  Widget _buildInlineGradeGrid(bool isDark) {
+    // All grades in order - no categories, just inline rows
+    final gradeRows = [
+      ['A+', 'A', 'A-'],
+      ['B+', 'B', 'B-'],
+      ['C+', 'C', 'C-'],
+      ['D+', 'D'],
+      ['F', 'F(CA)', 'F(ET)'],
+      ['I', 'I(ET)', 'I(CA)'],
     ];
 
     return Column(
-      children: gradeCategories.map((category) {
-        final categoryGrades = _grades
-            .where((g) => category['grades'].contains(g.grade))
+      children: gradeRows.map((rowGrades) {
+        final rowGradeObjects = _grades
+            .where((g) => rowGrades.contains(g.grade))
             .toList();
 
-        if (categoryGrades.isEmpty) return const SizedBox();
+        if (rowGradeObjects.isEmpty) return const SizedBox();
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                category['name'],
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: categoryGrades.map((grade) {
-                  final isSelected = _selectedGrade == grade.grade;
-                  final gradeColor = _getGradeColor(grade.grade);
-                  final gradeIcon = _getGradeIcon(grade.grade);
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.start,
+            children: rowGradeObjects.map((grade) {
+              final isSelected = _selectedGrade == grade.grade;
+              final gradeIcon = _getGradeIcon(grade.grade);
 
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedGrade = grade.grade;
-                      });
-                      // Optional: Show preview snackbar
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: isSelected
-                            ? LinearGradient(
-                                colors: [
-                                  gradeColor,
-                                  gradeColor.withOpacity(0.8),
-                                ],
-                              )
-                            : null,
-                        color: isSelected ? null : gradeColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? gradeColor
-                              : gradeColor.withOpacity(0.3),
-                          width: isSelected ? 2 : 1,
-                        ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: gradeColor.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Column(
-                        children: [
-                          Text(gradeIcon, style: const TextStyle(fontSize: 16)),
-                          const SizedBox(height: 4),
-                          Text(
-                            grade.grade,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : gradeColor,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            grade.gradePoint.toStringAsFixed(1),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isSelected ? Colors.white70 : gradeColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
+              return GradeCard(
+                grade: grade.grade,
+                gradeIcon: gradeIcon,
+                gradePoint: grade.gradePoint,
+                isSelected: isSelected,
+                onTap: () {
+                  setState(() {
+                    _selectedGrade = grade.grade;
+                  });
+                },
+              );
+            }).toList(),
           ),
         );
       }).toList(),
