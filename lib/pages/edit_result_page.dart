@@ -458,369 +458,396 @@ class _EditResultPageState extends State<EditResultPage>
             : FadeInAnimation(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      // Enhanced Module Information Card
-                      GlassCard(
-                        child: Column(
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 500),
+                      child: Column(
+                        children: [
+                          // Enhanced Module Information Card
+                          GlassCard(
+                            child: Column(
                               children: [
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    gradient: AppGradients.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.book,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        widget.moduleId,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: isDark
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        widget.moduleName,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 4,
-                                        children: [
-                                          _buildMetadataChip(
-                                            icon: Icons.credit_card,
-                                            label: '${widget.credits} Credits',
-                                            color: AppColors.accentTeal,
-                                            isDark: isDark,
-                                          ),
-                                          _buildMetadataChip(
-                                            icon: widget.isGpaModule
-                                                ? Icons.auto_graph
-                                                : Icons.school,
-                                            label: widget.isGpaModule
-                                                ? 'GPA Module'
-                                                : 'Non-GPA Module',
-                                            color: widget.isGpaModule
-                                                ? AppColors.primaryBlue
-                                                : AppColors.warning,
-                                            isDark: isDark,
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Divider(
-                              color: isDark
-                                  ? Colors.grey.shade800
-                                  : Colors.grey.shade200,
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
+                                Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'Current Grade',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        gradient: AppGradients.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.book,
+                                        color: Colors.white,
+                                        size: 28,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            _getGradeColor(widget.currentGrade),
-                                            _getGradeColor(
-                                              widget.currentGrade,
-                                            ).withOpacity(0.7),
-                                          ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(30),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            _getGradeIcon(widget.currentGrade),
-                                            style: const TextStyle(
-                                              fontSize: 16,
+                                            widget.moduleId,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark
+                                                  ? Colors.grey.shade400
+                                                  : Colors.grey.shade600,
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
+                                          const SizedBox(height: 2),
                                           Text(
-                                            widget.currentGrade,
-                                            style: const TextStyle(
+                                            widget.moduleName,
+                                            style: TextStyle(
+                                              fontSize: 16,
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 20,
-                                              color: Colors.white,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : Colors.black87,
                                             ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 4,
+                                            children: [
+                                              _buildMetadataChip(
+                                                icon: Icons.credit_card,
+                                                label:
+                                                    '${widget.credits} Credits',
+                                                color: AppColors.accentTeal,
+                                                isDark: isDark,
+                                              ),
+                                              _buildMetadataChip(
+                                                icon: widget.isGpaModule
+                                                    ? Icons.auto_graph
+                                                    : Icons.school,
+                                                label: widget.isGpaModule
+                                                    ? 'GPA Module'
+                                                    : 'Non-GPA Module',
+                                                color: widget.isGpaModule
+                                                    ? AppColors.primaryBlue
+                                                    : AppColors.warning,
+                                                isDark: isDark,
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
                                     ),
                                   ],
                                 ),
-                                if (_getGradePointValue(widget.currentGrade) >
-                                    0)
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      const Text(
-                                        'Grade Points',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _getGradePointValue(
-                                          widget.currentGrade,
-                                        ).toStringAsFixed(1),
-                                        style: TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Grade Selection Card
-                      GlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    gradient: AppGradients.goldGradient,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.edit_note,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
+                                const SizedBox(height: 16),
+                                Divider(
+                                  color: isDark
+                                      ? Colors.grey.shade800
+                                      : Colors.grey.shade200,
                                 ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Select New Grade',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Inline Grade Grid with Fixed Size Cards
-                            _buildInlineGradeGrid(isDark),
-
-                            if (_selectedGrade != null &&
-                                _selectedGrade != widget.currentGrade)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 20),
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        AppColors.success.withOpacity(0.1),
-                                        AppColors.success.withOpacity(0.05),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Current Grade',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                            vertical: 10,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                _getGradeColor(
+                                                  widget.currentGrade,
+                                                ),
+                                                _getGradeColor(
+                                                  widget.currentGrade,
+                                                ).withOpacity(0.7),
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              30,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                _getGradeIcon(
+                                                  widget.currentGrade,
+                                                ),
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                widget.currentGrade,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 20,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ],
                                     ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: AppColors.success.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.info_outline,
-                                        color: AppColors.success,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Grade Change Summary',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.success,
-                                              ),
+                                    if (_getGradePointValue(
+                                          widget.currentGrade,
+                                        ) >
+                                        0)
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          const Text(
+                                            'Grade Points',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
                                             ),
-                                            const SizedBox(height: 2),
-                                            RichText(
-                                              text: TextSpan(
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                ),
-                                                children: [
-                                                  TextSpan(
-                                                    text: widget.currentGrade,
-                                                    style: TextStyle(
-                                                      color: _getGradeColor(
-                                                        widget.currentGrade,
-                                                      ),
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  const TextSpan(text: ' → '),
-                                                  TextSpan(
-                                                    text: _selectedGrade,
-                                                    style: TextStyle(
-                                                      color: _getGradeColor(
-                                                        _selectedGrade!,
-                                                      ),
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  const TextSpan(text: ' '),
-                                                  TextSpan(
-                                                    text:
-                                                        '(+${(_getGradePointValue(_selectedGrade!) - _getGradePointValue(widget.currentGrade)).toStringAsFixed(1)} pts)',
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: AppColors.success,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _getGradePointValue(
+                                              widget.currentGrade,
+                                            ).toStringAsFixed(1),
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : Colors.black87,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                  ],
                                 ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                Navigator.pop(context);
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade400,
-                                ),
-                              ),
-                              child: Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                              ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _isSaving ? null : _saveResult,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryBlue,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: _isSaving
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
+                          const SizedBox(height: 20),
+
+                          // Grade Selection Card
+                          GlassCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        gradient: AppGradients.goldGradient,
+                                        shape: BoxShape.circle,
                                       ),
-                                    )
-                                  : const Text(
-                                      'Save Changes',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
+                                      child: const Icon(
+                                        Icons.edit_note,
+                                        color: Colors.white,
+                                        size: 18,
                                       ),
                                     ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Select New Grade',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+
+                                // Centered Inline Grade Grid
+                                Center(child: _buildInlineGradeGrid(isDark)),
+
+                                if (_selectedGrade != null &&
+                                    _selectedGrade != widget.currentGrade)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 20),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            AppColors.success.withOpacity(0.1),
+                                            AppColors.success.withOpacity(0.05),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppColors.success.withOpacity(
+                                            0.3,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.info_outline,
+                                            color: AppColors.success,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Grade Change Summary',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors.success,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                RichText(
+                                                  text: TextSpan(
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                    ),
+                                                    children: [
+                                                      TextSpan(
+                                                        text:
+                                                            widget.currentGrade,
+                                                        style: TextStyle(
+                                                          color: _getGradeColor(
+                                                            widget.currentGrade,
+                                                          ),
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      const TextSpan(
+                                                        text: ' → ',
+                                                      ),
+                                                      TextSpan(
+                                                        text: _selectedGrade,
+                                                        style: TextStyle(
+                                                          color: _getGradeColor(
+                                                            _selectedGrade!,
+                                                          ),
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      const TextSpan(text: ' '),
+                                                      TextSpan(
+                                                        text:
+                                                            '(+${(_getGradePointValue(_selectedGrade!) - _getGradePointValue(widget.currentGrade)).toStringAsFixed(1)} pts)',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color:
+                                                              AppColors.success,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Action Buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).clearSnackBars();
+                                    Navigator.pop(context);
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    side: BorderSide(
+                                      color: isDark
+                                          ? Colors.grey.shade600
+                                          : Colors.grey.shade400,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _isSaving ? null : _saveResult,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primaryBlue,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isSaving
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Save Changes',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -840,6 +867,7 @@ class _EditResultPageState extends State<EditResultPage>
     ];
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: gradeRows.map((rowGrades) {
         final rowGradeObjects = _grades
             .where((g) => rowGrades.contains(g.grade))
@@ -852,7 +880,7 @@ class _EditResultPageState extends State<EditResultPage>
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
-            alignment: WrapAlignment.start,
+            alignment: WrapAlignment.center,
             children: rowGradeObjects.map((grade) {
               final isSelected = _selectedGrade == grade.grade;
               final gradeIcon = _getGradeIcon(grade.grade);
