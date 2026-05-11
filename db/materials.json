@@ -31,38 +31,5 @@
             "file_type": "pdf"
           }
         ]
-    },
-    {
-        "module_id": "IT104021",
-        "materials": [
-          {
-            "id": "1",
-            "material_type": "notes",
-            "title": "Chapter 01",
-            "file_path": "assets/materials/IT103011/notes/chapter_01.pdf",
-            "file_type": "pdf"
-          },
-          {
-            "id": "2",
-            "material_type": "notes",
-            "title": "Chapter 02",
-            "file_path": "assets/materials/IT103011/notes/chapter_02.pdf",
-            "file_type": "pdf"
-          },
-          {
-            "id": "3",
-            "material_type": "past_papers",
-            "title": "Examination 2021/22",
-            "file_path": "assets/materials/IT103011/past_papers/examination_2021-22.pdf",
-            "file_type": "pdf"
-          },
-          {
-            "id": "4",
-            "material_type": "assignments",
-            "title": "Individual Assignment 01",
-            "file_path": "assets/materials/IT103011/assignments/Individual_Assignment_01.pdf",
-            "file_type": "pdf"
-          }
-        ]
     }
 ]

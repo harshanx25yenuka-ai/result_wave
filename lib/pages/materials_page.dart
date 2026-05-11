@@ -3,10 +3,10 @@ import 'package:result_wave/models/module.dart';
 import 'package:result_wave/models/material.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/material_service.dart';
+import 'package:result_wave/pages/pdf_viewer_page.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
-import 'package:open_file/open_file.dart';
 
 class MaterialsPage extends StatefulWidget {
   final String studentId;
@@ -77,11 +77,13 @@ class _MaterialsPageState extends State<MaterialsPage>
   }
 
   Future<void> _openMaterial(MaterialItem material) async {
-    try {
-      await OpenFile.open(material.filePath);
-    } catch (e) {
-      _showMessage('Error opening file: $e', isError: true);
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            PdfViewerPage(filePath: material.filePath, title: material.title),
+      ),
+    );
   }
 
   void _showMessage(String message, {required bool isError}) {
@@ -90,6 +92,7 @@ class _MaterialsPageState extends State<MaterialsPage>
         content: Text(message),
         backgroundColor: isError ? Colors.red : Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -97,7 +100,6 @@ class _MaterialsPageState extends State<MaterialsPage>
   List<ModuleMaterials> _getFilteredMaterials() {
     var filtered = List<ModuleMaterials>.from(_materials);
 
-    // Filter by type
     if (_selectedType != null && _selectedType != 'all') {
       filtered = filtered
           .map((moduleMaterial) {
@@ -116,7 +118,6 @@ class _MaterialsPageState extends State<MaterialsPage>
           .toList();
     }
 
-    // Filter by module
     if (_selectedModuleId != null && _selectedModuleId != 'all') {
       filtered = filtered
           .where((m) => m.moduleId == _selectedModuleId)
@@ -158,7 +159,6 @@ class _MaterialsPageState extends State<MaterialsPage>
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          // Module Filter
           if (_modules.isNotEmpty)
             PopupMenuButton<String>(
               icon: const Icon(Icons.filter_alt_outlined),
@@ -231,7 +231,6 @@ class _MaterialsPageState extends State<MaterialsPage>
                 }).toList(),
               ],
             ),
-          // Type Filter
           if (_materialTypes.isNotEmpty)
             PopupMenuButton<String>(
               icon: const Icon(Icons.sort_by_alpha),
@@ -308,7 +307,6 @@ class _MaterialsPageState extends State<MaterialsPage>
                 onRefresh: _loadData,
                 child: Column(
                   children: [
-                    // Stats Bar
                     Container(
                       margin: const EdgeInsets.all(16),
                       padding: const EdgeInsets.symmetric(
@@ -345,15 +343,14 @@ class _MaterialsPageState extends State<MaterialsPage>
                             color: Colors.white.withOpacity(0.3),
                           ),
                           _buildStatItem(
-                            Icons.download,
+                            Icons.remove_red_eye,
                             '${_getTotalMaterialsCount()}',
-                            'Available',
+                            'View Only',
                             Colors.white,
                           ),
                         ],
                       ),
                     ),
-                    // Materials List
                     Expanded(
                       child: ListView.builder(
                         physics: const BouncingScrollPhysics(),
@@ -443,7 +440,6 @@ class _MaterialsPageState extends State<MaterialsPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Module Header
           Container(
             padding: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -511,13 +507,13 @@ class _MaterialsPageState extends State<MaterialsPage>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.folder_open,
+                        Icons.visibility,
                         size: 12,
                         color: AppColors.primaryBlue,
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Semester $semester',
+                        'View Only',
                         style: TextStyle(
                           fontSize: 10,
                           color: AppColors.primaryBlue,
@@ -532,7 +528,6 @@ class _MaterialsPageState extends State<MaterialsPage>
           ),
           const SizedBox(height: 12),
 
-          // Materials by Type
           ...sortedTypes.map((type) {
             final materials = materialsByType[type]!;
             final config = _materialService.getMaterialTypeConfig(type);
@@ -676,11 +671,7 @@ class _MaterialsPageState extends State<MaterialsPage>
                 ],
               ),
             ),
-            Icon(
-              Icons.open_in_new,
-              size: 18,
-              color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-            ),
+            Icon(Icons.visibility, size: 18, color: AppColors.primaryBlue),
           ],
         ),
       ),
