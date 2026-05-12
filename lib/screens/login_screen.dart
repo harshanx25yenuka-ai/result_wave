@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:result_wave/screens/home_screen.dart';
 import 'package:result_wave/screens/create_account_screen.dart';
+import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/auth_service.dart';
 import 'package:result_wave/services/avatar_cache_service.dart';
+import 'package:result_wave/services/api_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -20,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   late AnimationController _controller;
   final AuthService _authService = AuthService();
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
@@ -54,28 +57,49 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoggingIn = true);
 
     try {
-      final result = await _authService.login(studentId, password);
+      // First try to login via API server
+      final apiResult = await _apiService.login(
+        studentId: studentId,
+        password: password,
+      );
 
-      if (result['success']) {
-        final cachedAvatarId = await AvatarCacheService.getAvatar(studentId);
-        if (cachedAvatarId != null) {
-          print('Avatar loaded from cache: $cachedAvatarId');
-        }
-
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HomeScreen(studentId: studentId),
-          ),
+      if (!apiResult['success']) {
+        // If API fails, try local database as fallback
+        final students = await DatabaseService().getStudents();
+        final student = students.firstWhere(
+          (s) => s.studentId == studentId,
+          orElse: () => throw Exception('Student ID not found'),
         );
-      } else {
-        _showMessage(result['error'], isError: true);
-        setState(() => _isLoggingIn = false);
+
+        if (student.password != password) {
+          _showMessage('Incorrect password', isError: true);
+          setState(() => _isLoggingIn = false);
+          return;
+        }
       }
+
+      final cachedAvatarId = await AvatarCacheService.getAvatar(studentId);
+      if (cachedAvatarId != null) {
+        print('Avatar loaded from cache: $cachedAvatarId');
+      }
+
+      await _authService.setLoggedIn(studentId);
+
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(studentId: studentId),
+        ),
+      );
     } catch (e) {
-      _showMessage('Login error: $e', isError: true);
+      _showMessage(
+        'Student ID not found. Please create an account.',
+        isError: true,
+      );
       setState(() => _isLoggingIn = false);
     }
   }
@@ -175,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen>
                               Icons.badge,
                               color: AppColors.primaryBlue,
                             ),
-                            hintText: 'Enter your Student ID',
+                            hintText: 'SOF-21-B1-11',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,

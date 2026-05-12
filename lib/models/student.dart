@@ -2,7 +2,7 @@ class Student {
   final String studentId;
   final String studentName;
   final String courseId;
-  final String password; // Added password field
+  final String password;
 
   Student({
     required this.studentId,
@@ -21,8 +21,8 @@ class Student {
   }
 
   static String getCoursePrefixFromId(String studentId) {
-    if (studentId.contains('/')) {
-      final parts = studentId.split('/');
+    if (studentId.contains('-')) {
+      final parts = studentId.split('-');
       if (parts.isNotEmpty) {
         return parts[0].toUpperCase();
       }
@@ -31,8 +31,8 @@ class Student {
   }
 
   static String getBatchFromId(String studentId) {
-    if (studentId.contains('/')) {
-      final parts = studentId.split('/');
+    if (studentId.contains('-')) {
+      final parts = studentId.split('-');
       if (parts.length > 2) {
         final batch = parts[2];
         if (batch == 'B1' || batch == 'B2') {
@@ -43,9 +43,29 @@ class Student {
     return '';
   }
 
+  static String getYearFromId(String studentId) {
+    if (studentId.contains('-')) {
+      final parts = studentId.split('-');
+      if (parts.length > 1) {
+        return parts[1];
+      }
+    }
+    return '';
+  }
+
+  static String getNumberFromId(String studentId) {
+    if (studentId.contains('-')) {
+      final parts = studentId.split('-');
+      if (parts.length > 3) {
+        return parts[3];
+      }
+    }
+    return '';
+  }
+
   static bool isValidStudentIdFormat(String studentId) {
     final regex = RegExp(
-      r'^(SOF|MMW|NET)/\d{2}/(B1|B2)/\d{2}$',
+      r'^(SOF|MMW|NET)-\d{2}-(B1|B2)-\d{2}$',
       caseSensitive: false,
     );
     return regex.hasMatch(studentId.toUpperCase().trim());
@@ -58,14 +78,14 @@ class Student {
       return 'Please enter Student ID';
     }
 
-    if (!trimmed.contains('/')) {
-      return 'Format: XXX/XX/BX/XX\nExample: SOF/21/B1/11';
+    if (!trimmed.contains('-')) {
+      return 'Format: XXX-XX-BX-XX\nExample: SOF-21-B1-11';
     }
 
-    final parts = trimmed.split('/');
+    final parts = trimmed.split('-');
 
     if (parts.length != 4) {
-      return 'Invalid format. Use: XXX/XX/BX/XX\nExample: SOF/21/B1/11';
+      return 'Invalid format. Use: XXX-XX-BX-XX\nExample: SOF-21-B1-11';
     }
 
     final prefix = parts[0].toUpperCase();
@@ -96,7 +116,7 @@ class Student {
     if (!password.contains(RegExp(r'[A-Z]'))) return false;
     if (!password.contains(RegExp(r'[a-z]'))) return false;
     if (!password.contains(RegExp(r'[0-9]'))) return false;
-    if (!password.contains(RegExp(r'[#\$%@_]'))) return false;
+    if (!password.contains(RegExp(r'[#%@_]'))) return false;
     return true;
   }
 
@@ -109,8 +129,8 @@ class Student {
       return 'Password must contain at least one simple letter';
     if (!password.contains(RegExp(r'[0-9]')))
       return 'Password must contain at least one number';
-    if (!password.contains(RegExp(r'[#\$%@_]')))
-      return 'Password must contain at least one special character (#, \$, _, @)';
+    if (!password.contains(RegExp(r'[#%@_]')))
+      return 'Password must contain at least one special character (#, %, @, _)';
     return null;
   }
 
@@ -138,5 +158,72 @@ class Student {
       default:
         return '';
     }
+  }
+
+  static String formatStudentId(String input) {
+    String cleaned = input
+        .replaceAll('/', '-')
+        .replaceAll(' ', '')
+        .toUpperCase();
+    cleaned = cleaned.replaceAll(RegExp(r'[^A-Za-z0-9-]'), '');
+
+    if (cleaned.isEmpty) return '';
+
+    String formatted = '';
+
+    if (cleaned.length >= 3) {
+      String courseCode = cleaned.substring(0, 3);
+      if (courseCode == 'SOF' || courseCode == 'MMW' || courseCode == 'NET') {
+        formatted = courseCode;
+      } else {
+        if (courseCode.startsWith('S'))
+          formatted = 'SOF';
+        else if (courseCode.startsWith('M'))
+          formatted = 'MMW';
+        else if (courseCode.startsWith('N'))
+          formatted = 'NET';
+        else
+          formatted = '';
+      }
+
+      if (cleaned.length >= 5 && formatted.isNotEmpty) {
+        String year = cleaned.substring(3, 5);
+        if (RegExp(r'^\d{2}$').hasMatch(year)) {
+          formatted += '-$year';
+        } else if (year.length == 1 && RegExp(r'^\d$').hasMatch(year)) {
+          formatted += '-$year';
+        } else {
+          formatted += '-';
+        }
+
+        if (cleaned.length >= 6 && formatted.isNotEmpty) {
+          String batch = cleaned[5];
+          if (batch == '1' || batch == '2') {
+            formatted += '-B$batch';
+          } else if (batch == 'B') {
+            formatted += '-B';
+          } else {
+            formatted += '-';
+          }
+
+          if (cleaned.length >= 8 && formatted.isNotEmpty) {
+            String studentNum = cleaned.substring(6, 8);
+            if (RegExp(r'^\d{2}$').hasMatch(studentNum)) {
+              formatted += '-$studentNum';
+            } else if (studentNum.length == 1 &&
+                RegExp(r'^\d$').hasMatch(studentNum)) {
+              formatted += '-$studentNum';
+            }
+          } else if (cleaned.length == 7 && formatted.isNotEmpty) {
+            String studentNum = cleaned.substring(6, 7);
+            if (RegExp(r'^\d$').hasMatch(studentNum)) {
+              formatted += '-$studentNum';
+            }
+          }
+        }
+      }
+    }
+
+    return formatted;
   }
 }

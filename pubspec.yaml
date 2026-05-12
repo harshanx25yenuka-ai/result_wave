@@ -23,6 +23,7 @@ dependencies:
   flutter_pdfview: ^1.3.2  # Add this for in-app PDF viewing
   # open_file: ^3.3.2
   # package_info_plus: ^10.1.0
+  http: ^1.1.0  # Add this for API calls
 
 dev_dependencies:
   flutter_test:

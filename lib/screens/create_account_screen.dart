@@ -8,6 +8,7 @@ import 'package:result_wave/screens/login_screen.dart';
 import 'package:result_wave/services/database_service.dart';
 import 'package:result_wave/services/auth_service.dart';
 import 'package:result_wave/services/avatar_cache_service.dart';
+import 'package:result_wave/services/api_service.dart';
 import 'package:result_wave/utils/constants.dart';
 import 'package:result_wave/utils/animations.dart';
 import 'package:result_wave/widgets/glass_card.dart';
@@ -49,6 +50,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   bool _hasMinLength = false;
 
   final AuthService _authService = AuthService();
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
@@ -120,46 +122,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     setState(() {});
   }
 
-  bool _isValidStudentName(String name) {
-    // Allow letters, spaces, dots, and hyphens only
-    // Valid formats: W. Y. Harshan, Yenuka.Harshan, Yenuka Harshan
-    final regex = RegExp(r'^[A-Za-z\s\.\-]+$');
-    if (!regex.hasMatch(name)) return false;
-
-    // Must contain at least one letter
-    if (!name.contains(RegExp(r'[A-Za-z]'))) return false;
-
-    // Cannot contain numbers
-    if (name.contains(RegExp(r'[0-9]'))) return false;
-
-    // Cannot contain special characters except . - and space
-    if (name.contains(RegExp(r'[^A-Za-z\s\.\-]'))) return false;
-
-    return true;
-  }
-
-  String? _validateStudentName(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Enter Student Name';
-    }
-
-    final trimmedName = value.trim();
-
-    if (trimmedName.length < 6) {
-      return 'Name must be at least 6 characters';
-    }
-
-    if (trimmedName.length > 18) {
-      return 'Name must be less than 18 characters';
-    }
-
-    if (!_isValidStudentName(trimmedName)) {
-      return 'Use letters, spaces, dots(.), or hyphens(-) only.\nExample: W. Y. Harshan, Yenuka.Harshan, Yenuka Harshan';
-    }
-
-    return null;
-  }
-
   Future<void> _loadData() async {
     try {
       await DatabaseService().loadJsonData();
@@ -228,17 +190,32 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       });
 
       try {
-        final registered = await _authService.registerStudent(
+        // Register via API server
+        final result = await _apiService.register(
           studentId: studentId,
           studentName: studentName,
           courseId: _selectedCourseId!,
           password: password,
+          avatarId: _selectedAvatarId,
         );
 
-        if (!registered) {
-          _showMessage('Student ID already exists', isError: true);
+        if (!result['success']) {
+          _showMessage(result['error'], isError: true);
           setState(() => _isCreating = false);
           return;
+        }
+
+        // Save to local database
+        final existingLocalStudent = await DatabaseService().getStudents();
+        if (!existingLocalStudent.any((s) => s.studentId == studentId)) {
+          await DatabaseService().insertStudent(
+            Student(
+              studentId: studentId,
+              studentName: studentName,
+              courseId: _selectedCourseId!,
+              password: password,
+            ),
+          );
         }
 
         if (_selectedAvatarId != null) {
@@ -249,9 +226,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           _selectedCourseId!,
         );
         for (var module in modules) {
-          await DatabaseService().insertResult(
-            Result(moduleId: module.moduleId, grade: 'N/A'),
-          );
+          final existingResults = await DatabaseService().getResults();
+          if (!existingResults.any((r) => r.moduleId == module.moduleId)) {
+            await DatabaseService().insertResult(
+              Result(moduleId: module.moduleId, grade: 'N/A'),
+            );
+          }
         }
 
         _showMessage('Account created successfully!', isError: false);
@@ -269,6 +249,37 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         _showMessage('Error creating account: $e', isError: true);
       }
     }
+  }
+
+  bool _isValidStudentName(String name) {
+    final regex = RegExp(r'^[A-Za-z\s\.\-]+$');
+    if (!regex.hasMatch(name)) return false;
+    if (!name.contains(RegExp(r'[A-Za-z]'))) return false;
+    if (name.contains(RegExp(r'[0-9]'))) return false;
+    if (name.contains(RegExp(r'[^A-Za-z\s\.\-]'))) return false;
+    return true;
+  }
+
+  String? _validateStudentName(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Enter Student Name';
+    }
+
+    final trimmedName = value.trim();
+
+    if (trimmedName.length < 6) {
+      return 'Name must be at least 6 characters';
+    }
+
+    if (trimmedName.length > 18) {
+      return 'Name must be less than 18 characters';
+    }
+
+    if (!_isValidStudentName(trimmedName)) {
+      return 'Use letters, spaces, dots(.), or hyphens(-) only.\nExample: W. Y. Harshan, Yenuka.Harshan, Yenuka Harshan';
+    }
+
+    return null;
   }
 
   void _navigateToLogin() {
@@ -456,7 +467,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                                     } else if (!_isIdValid) {
                                                       _showMessage(
                                                         _idError.isEmpty
-                                                            ? 'Please enter a valid Student ID'
+                                                            ? 'Please enter a valid Student ID (SOF-21-B1-11)'
                                                             : _idError,
                                                         isError: true,
                                                       );
@@ -679,7 +690,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           controller: _studentIdController,
           decoration: InputDecoration(
             labelText: 'Student ID',
-            helperText: 'Format: XXX/XX/BX/XX (SOF, MMW, or NET)',
+            helperText:
+                'Format: XXX-XX-BX-XX (SOF, MMW, or NET)\nExample: SOF-21-B1-11',
             prefixIcon: Icon(Icons.badge, color: AppColors.primaryBlue),
             suffixIcon: _isIdValid
                 ? Icon(Icons.check_circle, color: AppColors.success)
@@ -701,7 +713,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           ),
           textCapitalization: TextCapitalization.characters,
           inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9/]')),
+            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')),
           ],
         ),
         const SizedBox(height: 12),
@@ -750,7 +762,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           decoration: InputDecoration(
             labelText: 'Student Name',
             hintText: 'Examples: W. Y. Harshan, Yenuka.Harshan, Yenuka Harshan',
-            helperText: 'Use letters, spaces, dots(.), or hyphens(-) only',
+            helperText: 'Minimum 6, Maximum 18 characters',
             prefixIcon: Icon(Icons.person, color: AppColors.primaryBlue),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -1013,6 +1025,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     final studentId = _studentIdController.text.trim().toUpperCase();
     final prefix = Student.getCoursePrefixFromId(studentId);
     final batch = Student.getBatchFromId(studentId);
+    final year = Student.getYearFromId(studentId);
+    final number = Student.getNumberFromId(studentId);
     final courseName = Student.getCourseNameFromPrefix(prefix);
     String courseDescription;
 
@@ -1165,6 +1179,44 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                           ),
                           Text(
                             batch,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (year.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.info,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.calendar_today,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Year',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                          Text(
+                            '20$year',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
