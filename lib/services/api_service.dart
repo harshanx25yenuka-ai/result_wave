@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   // Default server IP - Change this to your laptop's IP
@@ -120,9 +119,15 @@ class ApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        return {'success': true, 'message': data['message']};
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Avatar updated successfully',
+        };
       } else {
-        return {'success': false, 'error': data['message'] ?? 'Update failed'};
+        return {
+          'success': false,
+          'error': data['message'] ?? 'Failed to update avatar',
+        };
       }
     } catch (e) {
       return {'success': false, 'error': 'Connection error: ${e.toString()}'};
